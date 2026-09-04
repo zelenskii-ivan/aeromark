@@ -1,0 +1,164 @@
+.input-answer {
+  display: grid;
+  gap: 9px;
+  margin-top: 28px;
+}
+.input-answer label {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0870ae;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.input-answer input {
+  width: 100%;
+  min-height: 68px;
+  border: 3px solid #cde5f1;
+  border-radius: 18px;
+  background: #fafdff;
+  padding: 14px 20px;
+  font-size: 24px;
+  font-weight: 900;
+  color: #10243e;
+  outline: none;
+}
+.input-answer input:focus {
+  border-color: #1687c1;
+  box-shadow: 0 0 0 5px #1687c122;
+}
+.input-answer input:disabled {
+  opacity: 0.8;
+}
+.slow-speech {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 900;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.slow-speech svg {
+  width: 18px;
+}
+.parent-gate {
+  text-align: center;
+  max-width: 620px;
+  margin: auto;
+  padding: 48px;
+}
+.gate-icon {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 18px;
+  border-radius: 22px;
+  background: #e2f5ff;
+  color: #0870ae;
+}
+.gate-icon svg {
+  width: 32px;
+  height: 32px;
+}
+.parent-gate > p {
+  color: #5c7185;
+  line-height: 1.55;
+}
+.pin-row {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.pin-row input {
+  width: 150px;
+  border: 2px solid #cde5f1;
+  border-radius: 14px;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 25px;
+  font-weight: 900;
+  letter-spacing: 0.35em;
+  outline: none;
+}
+.pin-row input:focus {
+  border-color: #1687c1;
+  box-shadow: 0 0 0 4px #1687c122;
+}
+.pin-error {
+  display: block;
+  color: #d63b49;
+  margin-top: 13px;
+}
+.parent-title,
+.parent-actions,
+.install-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.parent-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 8px;
+  background: #0866a5;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.file-button svg {
+  width: 16px;
+}
+.file-button input {
+  display: none;
+}
+.install-card {
+  background: linear-gradient(135deg, #fff 65%, #dff5ff);
+}
+.install-card p {
+  color: #5c7185;
+  line-height: 1.55;
+}
+.offline-badge {
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 10px 16px;
+  background: #e7faef;
+  color: #176638;
+  font-weight: 900;
+}
+@media (max-width: 700px) {
+  .install-card,
+  .parent-title {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .parent-gate {
+    padding: 32px 20px;
+  }
+  .pin-row {
+    flex-direction: column;
+  }
+  .pin-row input {
+    width: 100%;
+  }
+  .offline-badge {
+    align-self: flex-start;
+  }
+}

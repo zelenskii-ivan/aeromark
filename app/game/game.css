@@ -1,0 +1,222 @@
+.game-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #9edcff;
+  overflow: hidden;
+  color: #10243e;
+}
+.game-canvas,
+.game-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.game-hud {
+  position: absolute;
+  inset: 18px 18px auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 15px;
+  pointer-events: none;
+}
+.game-hud > * {
+  pointer-events: auto;
+}
+.game-hud > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 999px;
+  background: #ffffffed;
+  padding: 12px 18px;
+  box-shadow: 0 10px 30px #16445a30;
+}
+.game-hud > span {
+  justify-self: end;
+  border-radius: 999px;
+  background: #10243ee8;
+  color: #fff;
+  padding: 12px 18px;
+  font-weight: 900;
+}
+.game-brief {
+  position: absolute;
+  left: 18px;
+  top: 88px;
+  display: grid;
+  max-width: 280px;
+  border-radius: 18px;
+  background: #fff9;
+  padding: 14px 17px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 25px #16445a20;
+}
+.game-brief b {
+  color: #0870ae;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+.game-brief span {
+  line-height: 1.4;
+  margin-top: 4px;
+}
+.touch-controls {
+  position: absolute;
+  left: 22px;
+  bottom: 22px;
+  display: grid;
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(2, 58px);
+  gap: 7px;
+}
+.touch-controls button {
+  display: grid;
+  place-items: center;
+  border: 2px solid #ffffffbb;
+  border-radius: 18px;
+  background: #10243edb;
+  color: #fff;
+  box-shadow: 0 8px 22px #10243e40;
+  touch-action: none;
+}
+.touch-controls button:first-child {
+  grid-column: 2;
+}
+.touch-controls button:nth-child(2) {
+  grid-row: 2;
+  grid-column: 1;
+}
+.touch-controls button:nth-child(3) {
+  grid-row: 2;
+  grid-column: 2;
+}
+.touch-controls button:nth-child(4) {
+  grid-row: 2;
+  grid-column: 3;
+}
+.touch-controls .jump-button {
+  position: fixed;
+  right: 24px;
+  bottom: 28px;
+  width: 92px;
+  height: 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 900;
+}
+.touch-controls svg {
+  width: 27px;
+  height: 27px;
+}
+.game-win {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100% - 32px));
+  border: 3px solid #ffcf4a;
+  border-radius: 30px;
+  background: #fffffff5;
+  padding: 38px;
+  text-align: center;
+  box-shadow: 0 25px 80px #10243e55;
+}
+.game-win > div {
+  font-size: 54px;
+}
+.game-win h1 {
+  margin: 8px 0;
+  font-size: 34px;
+}
+.game-win p {
+  color: #526b7f;
+  line-height: 1.55;
+}
+.game-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  border: 2px solid #8ecae6;
+  border-radius: 26px;
+  background: linear-gradient(135deg, #092f4a, #0866a5);
+  color: #fff;
+  padding: 25px 30px;
+  box-shadow: 0 14px 38px #174d6b24;
+}
+.game-card.locked {
+  background: #e7eff3;
+  color: #526b7f;
+  border-color: #cbdce4;
+}
+.game-card > div {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.game-card .game-icon {
+  display: grid;
+  place-items: center;
+  min-width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: #ffffff20;
+  font-size: 34px;
+}
+.game-card.locked .game-icon {
+  background: #fff;
+}
+.game-card h3 {
+  font-size: 23px;
+  margin: 2px 0;
+}
+.game-card p {
+  margin: 0;
+  color: #d7f1ff;
+}
+.game-card.locked p {
+  color: #6b7f8c;
+}
+.mission-card:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.7);
+  opacity: 0.62;
+}
+.mission-card:disabled:hover {
+  transform: none;
+  box-shadow: 0 9px 24px #174d6b10;
+}
+@media (max-width: 700px) {
+  .game-hud {
+    grid-template-columns: auto 1fr;
+  }
+  .game-hud > div {
+    display: none;
+  }
+  .game-hud > span {
+    font-size: 14px;
+    padding: 10px 13px;
+  }
+  .game-brief {
+    top: 78px;
+    right: 18px;
+    max-width: none;
+  }
+  .game-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .game-card > div {
+    align-items: flex-start;
+  }
+  .game-win {
+    padding: 28px 20px;
+  }
+  .game-win h1 {
+    font-size: 28px;
+  }
+}
