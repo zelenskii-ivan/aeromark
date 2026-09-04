@@ -1,22 +1,13 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Standalone output keeps the production image small: `next build` emits a
-  // self-contained server with only the modules it actually imports.
-  output: "standalone",
+  // The public pilot is a static export. The full account-enabled build stays
+  // on the `improvements` branch for deployment to the future VPS.
+  output: "export",
   reactStrictMode: true,
   poweredByHeader: false,
-  async headers() {
-    return [
-      {
-        // The service worker must never be served from a stale HTTP cache,
-        // otherwise a deploy cannot roll a new cache version out.
-        source: "/sw.js",
-        headers: [
-          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
-        ],
-      },
-    ];
+  env: {
+    NEXT_PUBLIC_SYNC_ENABLED: "0",
   },
 };
 

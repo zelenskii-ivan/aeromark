@@ -7,6 +7,7 @@ import { readValue, removeValue, writeValue } from "./storage.ts";
 
 const CHILD_KEY = "aeromark-child-id";
 const PUSH_DELAY = 1500;
+const SYNC_ENABLED = process.env.NEXT_PUBLIC_SYNC_ENABLED !== "0";
 
 export type SyncPhase =
   | "unknown" // ещё не спрашивали сервер
@@ -28,14 +29,16 @@ export type SyncState = {
 };
 
 const emptyState: SyncState = {
-  phase: "unknown",
+  phase: SYNC_ENABLED ? "unknown" : "offline",
   account: null,
   childId: null,
   revision: null,
   choice: null,
   conflict: false,
   busy: false,
-  message: "",
+  message: SYNC_ENABLED
+    ? ""
+    : "Серверная синхронизация появится после запуска VPS.",
   savedAt: "",
 };
 
@@ -85,6 +88,8 @@ export function useSync(saved: Saved, restore: (next: Saved) => void) {
   // Состояние здесь меняется по ответу сети, а не синхронно в теле эффекта,
   // но правило этого не различает.
   useEffect(() => {
+    if (!SYNC_ENABLED) return;
+    // Запрос выполняется асинхронно, но правило видит вызов setState внутри helper.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadAccount();
   }, [loadAccount]);
