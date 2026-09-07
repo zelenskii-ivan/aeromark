@@ -6,7 +6,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,8 +15,33 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
       - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
       - run: npm ci
-        working-directory: server
       - run: npm run build
-        working-directory: server
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Образы собирались только на сервере — ломающийся Dockerfile всплывал
+      # уже во время деплоя.
+      - run: docker build -t aeromark-web .
+      - run: docker build -t aeromark-api ./server

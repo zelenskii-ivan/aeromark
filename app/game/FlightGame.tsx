@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import {
   ArrowDown,
@@ -12,30 +12,72 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  GRAVITY,
+  JUMP_VELOCITY,
+  OBSTACLES,
+  PART_BOB,
+  PART_POSITIONS,
+  PICKUP_RADIUS,
+  PLAYER_CENTER_OFFSET,
+  PLAYER_RADIUS,
+  TOP_TOLERANCE,
+} from "./layout";
 import "./game.css";
 
 type Props = { onExit: () => void; onComplete: () => void };
+
+/**
+ * Управление хранится по event.code, а не по event.key: на русской раскладке
+ * WASD приходит как «цф ыв», и по key игра просто не отвечала.
+ */
+type Control = "forward" | "back" | "left" | "right" | "jump";
+
+const CONTROL_BY_CODE: Record<string, Control> = {
+  ArrowUp: "forward",
+  KeyW: "forward",
+  ArrowDown: "back",
+  KeyS: "back",
+  ArrowLeft: "left",
+  KeyA: "left",
+  ArrowRight: "right",
+  KeyD: "right",
+  Space: "jump",
+};
+
+
 
 export default function FlightGame({ onExit, onComplete }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [collected, setCollected] = useState(0);
   const [won, setWon] = useState(false);
-  const keys = useRef<Record<string, boolean>>({});
+  const controls = useRef<Record<Control, boolean>>({
+    forward: false,
+    back: false,
+    left: false,
+    right: false,
+    jump: false,
+  });
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x9edcff);
     scene.fog = new THREE.Fog(0x9edcff, 28, 72);
     const camera = new THREE.PerspectiveCamera(
       58,
-      mount.clientWidth / mount.clientHeight,
+      mount.clientWidth / Math.max(mount.clientHeight, 1),
       0.1,
       120,
     );
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.shadowMap.enabled = true;
     mount.appendChild(renderer.domElement);
@@ -72,6 +114,7 @@ export default function FlightGame({ onExit, onComplete }: Props) {
     stadium.position.set(-20, 1.5, -18);
     stadium.castShadow = true;
     scene.add(stadium);
+
     const field = new THREE.Mesh(
       new THREE.CircleGeometry(6.6, 32),
       new THREE.MeshStandardMaterial({ color: 0x228b45 }),
@@ -82,17 +125,13 @@ export default function FlightGame({ onExit, onComplete }: Props) {
 
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x704627 });
     const crownMat = new THREE.MeshStandardMaterial({ color: 0x257d47 });
+    const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7);
+    const crownGeometry = new THREE.ConeGeometry(1.4, 3.4, 9);
     for (let i = 0; i < 22; i++) {
       const x = (i % 2 ? 1 : -1) * (8 + ((i * 7) % 25));
       const z = 28 - ((i * 11) % 58);
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7),
-        trunkMat,
-      );
-      const crown = new THREE.Mesh(
-        new THREE.ConeGeometry(1.4, 3.4, 9),
-        crownMat,
-      );
+      const trunk = new THREE.Mesh(trunkGeometry, trunkMat);
+      const crown = new THREE.Mesh(crownGeometry, crownMat);
       trunk.position.set(x, 0.8, z);
       crown.position.set(x, 2.8, z);
       scene.add(trunk, crown);
@@ -129,10 +168,7 @@ export default function FlightGame({ onExit, onComplete }: Props) {
     const rightArm = leftArm.clone();
     leftArm.position.set(-0.75, 1.77, 0);
     rightArm.position.set(0.75, 1.77, 0);
-    const leftLeg = new THREE.Mesh(
-      new THREE.BoxGeometry(0.42, 1.2, 0.48),
-      dark,
-    );
+    const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.2, 0.48), dark);
     const rightLeg = leftLeg.clone();
     leftLeg.position.set(-0.3, 0.62, 0);
     rightLeg.position.set(0.3, 0.62, 0);
@@ -148,33 +184,16 @@ export default function FlightGame({ onExit, onComplete }: Props) {
       color: 0xe7e0cc,
       roughness: 0.9,
     });
-    const obstacles: Array<{
-      mesh: THREE.Mesh;
-      x: number;
-      z: number;
-      width: number;
-      depth: number;
-      height: number;
-    }> = [];
-    [
-      [-4, 14, 1.1],
-      [4, 5, 1.5],
-      [-3, -6, 0.8],
-      [4, -17, 1.35],
-      [0, -28, 1.8],
-    ].forEach(([x, z, height], i) => {
-      const width = i === 4 ? 5 : 3.8;
-      const depth = 3.5;
+    for (const obstacle of OBSTACLES) {
       const block = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, depth),
+        new THREE.BoxGeometry(obstacle.width, obstacle.height, obstacle.depth),
         obstacleMaterial,
       );
-      block.position.set(x, height / 2, z);
+      block.position.set(obstacle.x, obstacle.height / 2, obstacle.z);
       block.castShadow = true;
       block.receiveShadow = true;
       scene.add(block);
-      obstacles.push({ mesh: block, x, z, width, depth, height });
-    });
+    }
 
     const partMaterial = new THREE.MeshStandardMaterial({
       color: 0xffd23f,
@@ -182,18 +201,9 @@ export default function FlightGame({ onExit, onComplete }: Props) {
       emissiveIntensity: 0.45,
       metalness: 0.55,
     });
-    const partPositions: [number, number, number][] = [
-      [-4, 2.6, 14],
-      [4, 3.1, 5],
-      [-3, 2.3, -6],
-      [4, 3.0, -17],
-      [0, 3.5, -28],
-    ];
-    const parts = partPositions.map(([x, y, z]) => {
-      const mesh = new THREE.Mesh(
-        new THREE.TorusGeometry(0.8, 0.25, 10, 18),
-        partMaterial,
-      );
+    const partGeometry = new THREE.TorusGeometry(0.8, 0.25, 10, 18);
+    const parts = PART_POSITIONS.map(([x, y, z]) => {
+      const mesh = new THREE.Mesh(partGeometry, partMaterial);
       mesh.position.set(x, y, z);
       mesh.rotation.x = Math.PI / 2;
       mesh.castShadow = true;
@@ -203,100 +213,121 @@ export default function FlightGame({ onExit, onComplete }: Props) {
 
     camera.position.set(0, 8, 34);
     camera.lookAt(player.position);
-    let frame = 0;
+
     let found = 0;
     let velocityY = 0;
     let grounded = true;
-    const clock = new THREE.Clock();
+    // THREE.Clock объявлен устаревшим в three 0.185 и печатает предупреждение
+    // в консоль при каждом запуске игры.
+    const timer = new THREE.Timer();
+
+    /** Стоит ли игрок внутри коробки на этой высоте — по одной оси за раз. */
+    const blocked = (x: number, z: number, y: number) =>
+      OBSTACLES.some(
+        (obstacle) =>
+          y < obstacle.height - TOP_TOLERANCE &&
+          Math.abs(x - obstacle.x) < obstacle.width / 2 + PLAYER_RADIUS &&
+          Math.abs(z - obstacle.z) < obstacle.depth / 2 + PLAYER_RADIUS,
+      );
+
     const animate = () => {
-      frame = requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.04);
+      timer.update();
+      const dt = Math.min(timer.getDelta(), 0.04);
       const speed = 10 * dt;
-      const previousX = player.position.x;
-      const previousZ = player.position.z;
       const previousY = player.position.y;
+
       let moveX = 0;
       let moveZ = 0;
-      if (keys.current.ArrowLeft || keys.current.a) moveX -= 1;
-      if (keys.current.ArrowRight || keys.current.d) moveX += 1;
-      if (keys.current.ArrowUp || keys.current.w) moveZ -= 1;
-      if (keys.current.ArrowDown || keys.current.s) moveZ += 1;
+      if (controls.current.left) moveX -= 1;
+      if (controls.current.right) moveX += 1;
+      if (controls.current.forward) moveZ -= 1;
+      if (controls.current.back) moveZ += 1;
+
       if (moveX || moveZ) {
         const length = Math.hypot(moveX, moveZ);
-        player.position.x += (moveX / length) * speed;
-        player.position.z += (moveZ / length) * speed;
+        const stepX = (moveX / length) * speed;
+        const stepZ = (moveZ / length) * speed;
+        // Оси разрешаются раздельно, иначе персонаж «прилипает» к стене
+        // вместо того чтобы скользить вдоль неё.
+        if (
+          !blocked(player.position.x + stepX, player.position.z, previousY)
+        ) {
+          player.position.x += stepX;
+        }
+        if (
+          !blocked(player.position.x, player.position.z + stepZ, previousY)
+        ) {
+          player.position.z += stepZ;
+        }
         player.rotation.y = THREE.MathUtils.lerp(
           player.rotation.y,
           Math.atan2(moveX, moveZ),
           0.18,
         );
-        const walk = Math.sin(performance.now() * 0.012) * 0.58;
-        leftArm.rotation.x = walk;
-        rightArm.rotation.x = -walk;
-        leftLeg.rotation.x = -walk;
-        rightLeg.rotation.x = walk;
+        if (!reducedMotion) {
+          const walk = Math.sin(performance.now() * 0.012) * 0.58;
+          leftArm.rotation.x = walk;
+          rightArm.rotation.x = -walk;
+          leftLeg.rotation.x = -walk;
+          rightLeg.rotation.x = walk;
+        }
       } else {
         leftArm.rotation.x *= 0.82;
         rightArm.rotation.x *= 0.82;
         leftLeg.rotation.x *= 0.82;
         rightLeg.rotation.x *= 0.82;
       }
-      for (const obstacle of obstacles) {
-        const insideX =
-          Math.abs(player.position.x - obstacle.x) < obstacle.width / 2 + 0.42;
-        const insideZ =
-          Math.abs(player.position.z - obstacle.z) < obstacle.depth / 2 + 0.42;
-        if (insideX && insideZ && player.position.y < obstacle.height - 0.08) {
-          player.position.x = previousX;
-          player.position.z = previousZ;
-          break;
-        }
-      }
-      if ((keys.current[" "] || keys.current.Space) && grounded) {
-        velocityY = 8.2;
+
+      if (controls.current.jump && grounded) {
+        velocityY = JUMP_VELOCITY;
         grounded = false;
       }
-      velocityY -= 20 * dt;
+      velocityY -= GRAVITY * dt;
       player.position.y += velocityY * dt;
+
       let surfaceY = 0;
-      for (const obstacle of obstacles) {
+      for (const obstacle of OBSTACLES) {
         const onTopX =
           Math.abs(player.position.x - obstacle.x) < obstacle.width / 2 - 0.1;
         const onTopZ =
           Math.abs(player.position.z - obstacle.z) < obstacle.depth / 2 - 0.1;
         const crossedTop =
-          previousY >= obstacle.height - 0.08 &&
+          previousY >= obstacle.height - TOP_TOLERANCE &&
           player.position.y <= obstacle.height;
-        if (onTopX && onTopZ && velocityY <= 0 && crossedTop)
+        if (onTopX && onTopZ && velocityY <= 0 && crossedTop) {
           surfaceY = Math.max(surfaceY, obstacle.height);
+        }
       }
       if (player.position.y <= surfaceY) {
         player.position.y = surfaceY;
         velocityY = 0;
         grounded = true;
-      } else if (player.position.y > surfaceY + 0.08) {
+      } else if (player.position.y > surfaceY + TOP_TOLERANCE) {
         grounded = false;
       }
+
       player.position.x = THREE.MathUtils.clamp(player.position.x, -12, 12);
       player.position.z = THREE.MathUtils.clamp(player.position.z, -34, 30);
+
       const playerCenter = new THREE.Vector3(
         player.position.x,
-        player.position.y + 1.7,
+        player.position.y + PLAYER_CENTER_OFFSET,
         player.position.z,
       );
       parts.forEach((part, i) => {
         if (!part.visible) return;
         part.rotation.z += dt * 1.8;
-        const baseY = partPositions[i]?.[1] || 1.3;
+        const baseY = PART_POSITIONS[i]?.[1] ?? 1.3;
         part.position.y =
-          baseY + Math.sin(performance.now() * 0.002 + i) * 0.25;
-        if (part.position.distanceTo(playerCenter) < 1.65) {
+          baseY + Math.sin(performance.now() * 0.002 + i) * PART_BOB;
+        if (part.position.distanceTo(playerCenter) < PICKUP_RADIUS) {
           part.visible = false;
           found += 1;
           setCollected(found);
           if (found === parts.length) setWon(true);
         }
       });
+
       camera.position.x = THREE.MathUtils.lerp(
         camera.position.x,
         player.position.x,
@@ -319,49 +350,81 @@ export default function FlightGame({ onExit, onComplete }: Props) {
       );
       renderer.render(scene, camera);
     };
-    animate();
+
+    // setAnimationLoop сам останавливается на скрытой вкладке и корректно
+    // отменяется в dispose(), в отличие от ручного requestAnimationFrame.
+    renderer.setAnimationLoop(animate);
 
     const down = (event: KeyboardEvent) => {
-      keys.current[event.key] = true;
-      if (
-        ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)
-      )
-        event.preventDefault();
+      const control = CONTROL_BY_CODE[event.code];
+      if (!control) return;
+      controls.current[control] = true;
+      // Иначе стрелки и пробел прокручивают страницу под игрой.
+      event.preventDefault();
     };
     const up = (event: KeyboardEvent) => {
-      keys.current[event.key] = false;
+      const control = CONTROL_BY_CODE[event.code];
+      if (control) controls.current[control] = false;
     };
-    const resize = () => {
-      if (!mount.clientWidth || !mount.clientHeight) return;
-      camera.aspect = mount.clientWidth / mount.clientHeight;
+    /** Потеря фокуса окна оставляла клавишу «зажатой» навсегда. */
+    const releaseAll = () => {
+      controls.current.forward = false;
+      controls.current.back = false;
+      controls.current.left = false;
+      controls.current.right = false;
+      controls.current.jump = false;
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      const width = mount.clientWidth;
+      const height = mount.clientHeight;
+      if (!width || !height) return;
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
-    };
-    window.addEventListener("keydown", down);
+      renderer.setSize(width, height);
+    });
+    resizeObserver.observe(mount);
+
+    window.addEventListener("keydown", down, { passive: false });
     window.addEventListener("keyup", up);
-    window.addEventListener("resize", resize);
+    window.addEventListener("blur", releaseAll);
+
     return () => {
-      cancelAnimationFrame(frame);
+      renderer.setAnimationLoop(null);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
-      window.removeEventListener("resize", resize);
-      renderer.dispose();
+      window.removeEventListener("blur", releaseAll);
+      resizeObserver.disconnect();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh) {
           object.geometry.dispose();
           const material = object.material;
-          if (Array.isArray(material))
-            material.forEach((item) => item.dispose());
+          if (Array.isArray(material)) material.forEach((item) => item.dispose());
           else material.dispose();
         }
       });
-      mount.removeChild(renderer.domElement);
+      renderer.dispose();
+      renderer.domElement.remove();
     };
   }, []);
 
-  const press = (key: string, active: boolean) => {
-    keys.current[key] = active;
-  };
+  const press = useCallback((control: Control, active: boolean) => {
+    controls.current[control] = active;
+  }, []);
+
+  /** Один набор обработчиков на кнопку, включая pointercancel — без него
+   *  палец, уехавший за край экрана, оставлял движение включённым. */
+  const touchProps = (control: Control) => ({
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      press(control, true);
+    },
+    onPointerUp: () => press(control, false),
+    onPointerCancel: () => press(control, false),
+    onPointerLeave: () => press(control, false),
+    onContextMenu: (event: React.MouseEvent) => event.preventDefault(),
+  });
+
   return (
     <main className="game-shell">
       <div ref={mountRef} className="game-canvas" />
@@ -374,53 +437,33 @@ export default function FlightGame({ onExit, onComplete }: Props) {
           <Plane />
           <strong>Парк Аэромарка: обби-маршрут</strong>
         </div>
-        <span>{collected} / 5 деталей</span>
+        <span aria-live="polite">{collected} / {PART_POSITIONS.length} деталей</span>
       </header>
       <section className="game-brief">
         <b>Задание</b>
         <span>
           Проведи персонажа по полосе препятствий и собери пять золотых деталей.
-          Прыжок — пробел.
+          Управление — кнопки на экране или клавиши со стрелками, прыжок —
+          кнопка «Прыжок» или пробел.
         </span>
       </section>
       <div className="touch-controls" aria-label="Управление персонажем">
-        <button
-          onPointerDown={() => press("ArrowUp", true)}
-          onPointerUp={() => press("ArrowUp", false)}
-          onPointerLeave={() => press("ArrowUp", false)}
-          aria-label="Вперёд"
-        >
+        <button type="button" {...touchProps("forward")} aria-label="Вперёд">
           <ArrowUp />
         </button>
-        <button
-          onPointerDown={() => press("ArrowLeft", true)}
-          onPointerUp={() => press("ArrowLeft", false)}
-          onPointerLeave={() => press("ArrowLeft", false)}
-          aria-label="Влево"
-        >
+        <button type="button" {...touchProps("left")} aria-label="Влево">
           <ArrowLeft />
         </button>
-        <button
-          onPointerDown={() => press("ArrowDown", true)}
-          onPointerUp={() => press("ArrowDown", false)}
-          onPointerLeave={() => press("ArrowDown", false)}
-          aria-label="Назад"
-        >
+        <button type="button" {...touchProps("back")} aria-label="Назад">
           <ArrowDown />
         </button>
-        <button
-          onPointerDown={() => press("ArrowRight", true)}
-          onPointerUp={() => press("ArrowRight", false)}
-          onPointerLeave={() => press("ArrowRight", false)}
-          aria-label="Вправо"
-        >
+        <button type="button" {...touchProps("right")} aria-label="Вправо">
           <ArrowRight />
         </button>
         <button
+          type="button"
           className="jump-button"
-          onPointerDown={() => press("Space", true)}
-          onPointerUp={() => press("Space", false)}
-          onPointerLeave={() => press("Space", false)}
+          {...touchProps("jump")}
           aria-label="Прыжок"
         >
           <ChevronsUp />

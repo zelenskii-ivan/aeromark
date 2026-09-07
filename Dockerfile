@@ -1,9 +1,29 @@
-FROM node:22-bookworm-slim
+# Сборка отделена от рантайма: в финальный образ не попадают ни dev-зависимости,
+# ни исходники, ни кеш npm. Раньше это был один слой на 1+ ГБ, запускавшийся от root.
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
+
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+
+FROM node:22-bookworm-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+# output: "standalone" собирает сервер вместе с нужными модулями.
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+USER node
 EXPOSE 3000
-CMD ["npm", "start", "--", "--host", "0.0.0.0"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server.js"]

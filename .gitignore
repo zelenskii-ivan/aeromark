@@ -29,6 +29,9 @@ yarn-error.log*
 
 # environment and secrets
 .env*
+# Шаблон без значений — он обязан лежать в репозитории, иначе инструкция
+# «скопируйте .env.example в .env» указывает на несуществующий файл.
+!.env.example
 
 # production data
 /server/node_modules/
@@ -45,3 +48,6 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# typescript build info
+*.tsbuildinfo

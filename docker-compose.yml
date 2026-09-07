@@ -6,9 +6,6 @@ services:
       NODE_ENV: production
     expose:
       - "3000"
-    depends_on:
-      api:
-        condition: service_healthy
 
   api:
     build: ./server
@@ -16,26 +13,13 @@ services:
     env_file: .env
     environment:
       PORT: 4000
-      DATABASE_URL: ${DATABASE_URL}
-      APP_ORIGIN: ${APP_ORIGIN}
-      ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN}
       NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     expose:
       - "4000"
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://localhost:4000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
-        ]
-      interval: 10s
-      timeout: 3s
-      retries: 10
 
   postgres:
     image: postgres:17-alpine

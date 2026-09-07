@@ -191,6 +191,7 @@ body {
   padding-top: 22px;
 }
 .diagnostic-card,
+.continue-card,
 .captain-card,
 .panel {
   background: #fff;
@@ -205,6 +206,25 @@ body {
   gap: 24px;
   padding: 30px 34px;
   border-left: 8px solid #ffb703;
+}
+.continue-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 30px 34px;
+  border-left: 8px solid #087cb8;
+  background: linear-gradient(120deg, #ffffff, #eef9ff);
+}
+.continue-card h2 {
+  margin: 5px 0;
+  font-size: 30px;
+  letter-spacing: -0.025em;
+}
+.continue-card p {
+  margin: 5px 0;
+  color: #5c7185;
+  line-height: 1.55;
 }
 .diagnostic-card h2,
 .captain-card h2,
@@ -594,6 +614,7 @@ body {
     height: 43px;
   }
   .diagnostic-card,
+  .continue-card,
   .panel.compact {
     align-items: stretch;
     flex-direction: column;
@@ -619,4 +640,526 @@ body {
   .lesson header > .star-pill {
     display: none;
   }
+}
+
+/* --- Карточки действий: работа над ошибками, тренажёр, игровой эпизод --- */
+.pill-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.streak-pill {
+  background: color-mix(in srgb, var(--accent) 35%, #fff);
+}
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.action-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: 0 10px 24px -18px rgba(16, 36, 62, 0.5);
+}
+.action-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0.35rem 0 0.4rem;
+  color: var(--foreground);
+}
+.action-card p {
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+.action-card.muted {
+  opacity: 0.72;
+}
+.game-card {
+  margin-bottom: 1.5rem;
+}
+.captain-card button {
+  margin-top: 0.85rem;
+}
+.fine-print {
+  margin-top: 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--muted-foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- Синхронизация с семейным сервером --- */
+.account-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+  background:
+    linear-gradient(135deg, rgba(8, 124, 184, 0.82), rgba(15, 72, 114, 0.9)),
+    url("/flight-map.webp") center / cover;
+}
+.account-shell {
+  width: min(760px, 100%);
+}
+.account-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+.account-brand svg {
+  width: 30px;
+  height: 30px;
+}
+.account-panel {
+  padding: clamp(24px, 5vw, 42px);
+}
+.account-loading {
+  padding: 32px;
+  border-radius: 24px;
+  background: #fff;
+  color: var(--foreground);
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+}
+.inline-icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  width: 1em;
+  height: 1em;
+}
+.sync-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.9rem 0 1rem;
+}
+.sync-tabs button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.88rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.sync-tabs button.active {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  border-color: var(--ring);
+}
+.sync-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+.sync-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.sync-form input {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--input);
+  border-radius: 0.7rem;
+  background: #fff;
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--foreground);
+}
+.sync-form input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+.child-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.child-chip {
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.95rem;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.child-chip.active {
+  border-color: var(--primary);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-weight: 600;
+}
+.sync-choice {
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+}
+.sync-choice strong {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--foreground);
+}
+.sync-choice p {
+  margin: 0 0 0.85rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
+.sync-status {
+  margin-top: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+/* --- Уроки: обучающие шаги --- */
+.lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+.lesson-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.25rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  color: var(--foreground);
+}
+.lesson-card:hover {
+  border-color: var(--ring);
+}
+.lesson-card.done {
+  border-left-color: #2f9e5c;
+  background: color-mix(in srgb, #2f9e5c 7%, var(--card));
+}
+.lesson-card h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+}
+.lesson-card p {
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  margin: 0;
+}
+.lesson-card footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+.teach-say {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.1rem 1.2rem;
+  border-radius: var(--radius);
+  background: var(--secondary);
+}
+.teach-avatar {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+.teach-say strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--secondary-foreground);
+}
+.teach-say p {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+.teach-rule {
+  padding: 1.25rem;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+}
+.teach-rule h1 {
+  font-size: 1.4rem;
+  margin: 0.3rem 0 0.6rem;
+}
+.teach-rule p {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+/* Числовой домик: целое сверху, две части снизу */
+.bond {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 1.25rem 0;
+}
+.bond-whole,
+.bond-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  border: 3px solid var(--primary);
+  border-radius: 50%;
+  background: var(--card);
+  font-size: 2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.bond-whole span,
+.bond-part span {
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+}
+.bond-whole.empty,
+.bond-part.empty {
+  border-style: dashed;
+  border-color: var(--accent);
+}
+.bond input {
+  width: 60px;
+  border: none;
+  background: transparent;
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--foreground);
+}
+.bond-legs {
+  width: 120px;
+  height: 26px;
+  border-left: 3px solid var(--primary);
+  border-right: 3px solid var(--primary);
+  transform: perspective(60px) rotateX(-28deg);
+}
+.bond-parts {
+  display: flex;
+  gap: 1.5rem;
+}
+/* Порядок событий */
+.order-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  min-height: 60px;
+  padding: 0.75rem;
+  margin: 1rem 0 0.75rem;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+}
+.order-empty {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+}
+.order-pool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.order-chip {
+  padding: 0.6rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: var(--card);
+  font-size: 1rem;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.order-chip.placed {
+  border-color: var(--primary);
+  background: var(--secondary);
+}
+.order-chip b {
+  margin-right: 0.4rem;
+  color: var(--primary);
+}
+.order-chip:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Звуковая схема слова */
+.scheme-word {
+  margin: 1rem 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+.scheme-slots {
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  margin-bottom: 1.1rem;
+}
+.scheme-slot {
+  width: 56px;
+  height: 56px;
+  border: 2px dashed var(--border);
+  border-radius: 0.6rem;
+  background: var(--card);
+  font-size: 1.1rem;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.scheme-palette {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.scheme-chip {
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: 0.6rem;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.scheme-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Соединение пар */
+.match-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.match-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 2fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+.match-left {
+  font-weight: 700;
+}
+.match-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.match-option {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--card);
+  font-size: 0.95rem;
+  color: var(--foreground);
+  cursor: pointer;
+}
+.match-option.selected {
+  border-color: var(--primary);
+  background: var(--secondary);
+}
+.match-option.correct {
+  border-color: #2f9e5c;
+  background: color-mix(in srgb, #2f9e5c 16%, #fff);
+}
+.match-option.wrong {
+  border-color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 12%, #fff);
+}
+/* Подсказка и напоминание правила */
+.hint-box {
+  margin-top: 1rem;
+}
+.hint-box button,
+.hint-box p {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  font-size: 0.95rem;
+  color: var(--foreground);
+  cursor: pointer;
+  margin: 0;
+}
+.hint-box svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.rule-recall {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--muted-foreground);
+}
+.rule-recall summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+}
+.rule-recall p {
+  margin: 0.5rem 0 0;
+  line-height: 1.45;
+}
+@media (max-width: 700px) {
+  .match-row {
+    grid-template-columns: 1fr;
+  }
+  .bond-parts {
+    gap: 1rem;
+  }
+}
+.bond input::placeholder {
+  color: var(--accent);
+  opacity: 1;
 }
