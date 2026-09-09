@@ -8,6 +8,8 @@ import type { Task } from "../content/types.ts";
  * «тире», а список вариантов превращался в «один точка четыре точка два точка
  * пять». Отдельно ломались задания на фигуры: ▲, ● и ■ заменялись одним
  * словом «фигура», и на слух ряд был неразличим.
+ *
+ * Озвучивается задание, а не варианты ответа: см. speechForTask.
  */
 
 /** Символы, у которых есть человеческое название. */
@@ -23,14 +25,6 @@ const MARKS: Record<string, string> = {
   "!": "восклицательный знак",
   ",": "запятая",
 };
-
-const ORDINALS = [
-  "Первый вариант",
-  "Второй вариант",
-  "Третий вариант",
-  "Четвёртый вариант",
-  "Пятый вариант",
-];
 
 const VOWEL_NAMES: Record<string, string> = {
   а: "а", е: "е", ё: "ё", и: "и", о: "о", у: "у", ы: "ы", э: "э", ю: "ю", я: "я",
@@ -105,20 +99,22 @@ const finish = (text: string): string => {
   return /[.?!]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
 
-/** Полная реплика для задачи: текст для чтения, вопрос и варианты ответа. */
+/**
+ * Реплика для задачи: текст для чтения и сам вопрос.
+ *
+ * Варианты ответа не озвучиваются намеренно. Голос перечислял их вслух
+ * («Первый вариант, пять. Второй вариант, шесть…»), и получалось, что задание
+ * тонуло в списке: ребёнок ждал конца перечисления вместо того, чтобы читать
+ * варианты глазами. Варианты остаются на экране — их и надо прочитать.
+ */
 export function speechForTask(task: Task): string {
   if (task.speech) return prepareSpeech(task.speech);
   const parts: string[] = [];
   if (task.read) parts.push(finish(prepareSpeech(task.read)));
   parts.push(finish(prepareSpeech(task.prompt)));
-  if (task.options.length) {
-    task.options.forEach((option, index) => {
-      const label = ORDINALS[index] ?? `Вариант ${index + 1}`;
-      parts.push(finish(`${label}, ${prepareSpeech(option)}`));
-    });
-  } else {
-    parts.push("Введи ответ в поле.");
-  }
+  // Подсказка про поле ввода остаётся: это не вариант ответа, а способ
+  // ответить, и он не виден на экране до фокуса.
+  if (!task.options.length) parts.push("Введи ответ в поле.");
   return parts.filter(Boolean).join(" ");
 }
 

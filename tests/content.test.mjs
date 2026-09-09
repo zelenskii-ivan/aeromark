@@ -137,11 +137,35 @@ test("ударение проговаривается словами", () => {
   assert.equal(prepareSpeech("пи́лот"), "пилот, с ударением на и");
 });
 
-test("варианты ответа перечисляются словами, а не номерами с точкой", () => {
-  const speech = speechForTask(diagnostic[0]);
-  assert.match(speech, /Первый вариант/);
-  assert.match(speech, /Второй вариант/);
-  assert.doesNotMatch(speech, /1\./, "«1.» читается как «один точка»");
+test("вслух читается задание, а не варианты ответа", () => {
+  // Голос перечислял варианты, и задание тонуло в списке. Варианты остаются
+  // на экране: их читают глазами.
+  const withOptions = [
+    ...diagnostic,
+    ...missions.flatMap((mission) => mission.tasks),
+  ].filter((task) => task.options.length && !task.speech);
+  assert.ok(withOptions.length > 20, "нечего проверять");
+  for (const task of withOptions) {
+    const speech = speechForTask(task);
+    assert.doesNotMatch(speech, /вариант/i, `${task.id}: в озвучке перечислены варианты`);
+    assert.ok(speech.length > 0, `${task.id}: задание не озвучивается вовсе`);
+    // Точная проверка: реплика та же, что у задачи без вариантов вовсе, минус
+    // подсказка про поле ввода. Сравнение по вхождению слов здесь врёт —
+    // вариант может дословно повторять кусок вопроса.
+    const bare = speechForTask({ ...task, options: [] }).replace(
+      /\s*Введи ответ в поле\.$/,
+      "",
+    );
+    assert.equal(speech, bare, `${task.id}: в реплику попало что-то кроме задания`);
+  }
+});
+
+test("задание с полем ввода объясняет, как отвечать", () => {
+  const typed = [...diagnostic, ...missions.flatMap((m) => m.tasks)].find(
+    (task) => !task.options.length && !task.speech,
+  );
+  assert.ok(typed, "нет ни одной задачи со свободным вводом");
+  assert.match(speechForTask(typed), /Введи ответ в поле/);
 });
 
 test("в реплику не попадает ничего, кроме букв, цифр и обычной пунктуации", () => {
