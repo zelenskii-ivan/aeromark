@@ -17,6 +17,8 @@ import {
 } from "@/content/lesson";
 import { isCorrect } from "@/content/types";
 import { cancelSpeech, speakTask } from "@/lib/speech";
+import { playMiss, playWin } from "@/lib/celebrate";
+import { Cheer } from "@/app/cheer";
 
 type Props = {
   lesson: Lesson;
@@ -46,6 +48,7 @@ export function LessonPlayer({ lesson, onExit, onAnswer, onFinish, stars }: Prop
   const [checked, setChecked] = useState(false);
   const [right, setRight] = useState(false);
   const [hintOpen, setHintOpen] = useState(false);
+  const [burst, setBurst] = useState(0);
   // Ответы разных типов шагов: выбор, ввод, домик, порядок, схема, пары.
   const [picked, setPicked] = useState("");
   const [typed, setTyped] = useState("");
@@ -144,6 +147,13 @@ export function LessonPlayer({ lesson, onExit, onAnswer, onFinish, stars }: Prop
     const ok = evaluate();
     setRight(ok);
     setChecked(true);
+    // Тот же отклик, что и в заданиях: иначе урок ощущается суше тренажёра.
+    if (ok) {
+      playWin();
+      setBurst((current) => current + 1);
+    } else {
+      playMiss();
+    }
     onAnswer(step, ok);
   };
 
@@ -172,7 +182,8 @@ export function LessonPlayer({ lesson, onExit, onAnswer, onFinish, stars }: Prop
           <div className="star-pill">⭐ {stars}</div>
         </header>
 
-        <article className="task-card">
+        <article className={`task-card ${checked && !right ? "missed" : ""}`}>
+          <Cheer burst={right ? burst : 0} />
           <div className="task-top">
             <span className="skill-chip">{lesson.subject}</span>
             <Button

@@ -21,6 +21,7 @@ import {
   Trophy,
   Upload,
   Volume2,
+  VolumeX,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,8 @@ import {
   type Saved,
 } from "@/lib/progress";
 import { cancelSpeech, primeVoices, speakTask } from "@/lib/speech";
+import { isSoundOn, playMiss, playWin, setSoundOn } from "@/lib/celebrate";
+import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
 import {
@@ -137,6 +140,9 @@ export default function Home() {
   const [checked, setChecked] = useState(false);
   const [right, setRight] = useState(false);
   const [starEarned, setStarEarned] = useState(false);
+  /** Растёт с каждым верным ответом: по нему пересобирается салют. */
+  const [burst, setBurst] = useState(0);
+  const [sound, setSound] = useState(true);
   const [lesson, setLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
@@ -148,6 +154,7 @@ export default function Home() {
     setParentPin(readValue(PIN_KEY) ?? "");
     setChildName(readValue(NAME_KEY) || DEFAULT_NAME);
     setPersistent(isPersistent());
+    setSound(isSoundOn());
     // setLoaded обязан выполниться при любом исходе чтения, иначе приложение
     // навсегда остаётся на заставке.
     setLoaded(true);
@@ -276,6 +283,14 @@ export default function Home() {
     const ok = isCorrect(response, task);
     setRight(ok);
     setChecked(true);
+    // Звук заводится здесь, внутри обработчика нажатия: браузер разрешает
+    // воспроизведение только как ответ на действие пользователя.
+    if (ok) {
+      playWin();
+      setBurst((current) => current + 1);
+    } else {
+      playMiss();
+    }
     const outcome = applyAnswer(saved, task, ok);
     setStarEarned(outcome.starEarned);
     setSaved(outcome.next);
@@ -518,7 +533,8 @@ export default function Home() {
               {saved.stars}
             </div>
           </header>
-          <article className="task-card">
+          <article className={`task-card ${checked && !right ? "missed" : ""}`}>
+            <Cheer burst={right ? burst : 0} />
             <div className="task-top">
               <span className="skill-chip">{task.skill}</span>
               <Button
@@ -582,6 +598,7 @@ export default function Home() {
               {checked && (
                 <div className={`feedback ${right ? "good" : "try"}`}>
                   <strong>
+                    <span className="feedback-face">{right ? "🎉" : "🙁"}</span>
                     {right
                       ? "Верно! Отличная работа, пилот!"
                       : "Почти! Давай разберёмся."}
@@ -1026,6 +1043,25 @@ export default function Home() {
                     />
                     <Button onClick={saveName} disabled={!nameDraft.trim()}>
                       Сохранить
+                    </Button>
+                  </div>
+
+                  <h3 className="research-title">Звук</h3>
+                  <p className="lead">
+                    Короткий сигнал на верный и на неверный ответ. Салют из
+                    шаров остаётся в любом случае — он беззвучный.
+                  </p>
+                  <div className="parent-actions">
+                    <Button
+                      variant={sound ? "default" : "outline"}
+                      onClick={() => {
+                        setSoundOn(!sound);
+                        setSound(!sound);
+                        if (!sound) playWin();
+                      }}
+                    >
+                      {sound ? <Volume2 /> : <VolumeX />}
+                      {sound ? "Звук включён" : "Звук выключен"}
                     </Button>
                   </div>
                 </section>
