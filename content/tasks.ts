@@ -751,3 +751,26 @@ export const missions: Mission[] = [
     ],
   },
 ];
+
+/**
+ * Полёт открывается предыдущим полётом.
+ *
+ * Раньше полёты с третьего по пятнадцатый ждали победы в трёхмерной игре.
+ * Игру пройти можно — маршрут проверен тестом, — но не всякий ребёнок её
+ * проходит: слабый ноутбук, тачпад, укачивает от трёхмерной сцены. Такой
+ * ребёнок терял тринадцать полётов из пятнадцати, а «Продолжить» молча уводило
+ * в бесконечную тренировку. Игра осталась наградой и курс не держит.
+ */
+export function missionUnlocked(id: number, completed: readonly number[]): boolean {
+  const first = missions[0]?.id;
+  return id === first || completed.includes(id - 1);
+}
+
+/** Следующий незакрытый полёт по ленте, или null, если пройдены все. */
+export function nextMissionFor(completed: readonly number[]): Mission | null {
+  return (
+    missions.find(
+      (item) => !completed.includes(item.id) && missionUnlocked(item.id, completed),
+    ) ?? null
+  );
+}

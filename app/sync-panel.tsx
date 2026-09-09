@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Cloud, CloudOff, LogOut, MailCheck, RefreshCw, UserPlus } from "lucide-react";
+import {
+  Cloud,
+  CloudOff,
+  KeyRound,
+  LogOut,
+  MailCheck,
+  RefreshCw,
+  UserPlus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MISSIONS_NOUN, STARS_NOUN, withCount } from "@/content/types";
 import type { Saved } from "@/lib/progress";
@@ -14,11 +22,71 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
   const [childName, setChildName] = useState("");
   const [childPin, setChildPin] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
 
   if (state.phase === "unknown") return null;
+
+  /**
+   * Форма нового пароля показывается раньше всего остального: по ссылке из
+   * письма родитель может прийти и уже войдя в кабинет.
+   */
+  if (state.resetToken) {
+    const short = newPassword.length < 10;
+    const mismatch = repeatPassword.length > 0 && repeatPassword !== newPassword;
+    return (
+      <section className="panel account-panel">
+        <span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ СЕМЬИ</span>
+        <h2>Новый пароль</h2>
+        <p className="lead">
+          Придумайте пароль не короче 10 знаков. Ссылка действует час и
+          срабатывает один раз, а вход на других устройствах придётся повторить —
+          так безопаснее.
+        </p>
+        <div className="sync-form">
+          <label>
+            Новый пароль
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              placeholder="не короче 10 знаков"
+            />
+          </label>
+          <label>
+            Ещё раз
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={repeatPassword}
+              onChange={(event) => setRepeatPassword(event.target.value)}
+              placeholder="повторите"
+            />
+          </label>
+        </div>
+        <div className="parent-actions">
+          <Button
+            disabled={state.busy || short || mismatch || !repeatPassword}
+            onClick={() => sync.resetPassword(state.resetToken ?? "", newPassword)}
+          >
+            <KeyRound />
+            Сохранить пароль
+          </Button>
+          <Button variant="outline" disabled={state.busy} onClick={sync.cancelReset}>
+            Отмена
+          </Button>
+        </div>
+        <div aria-live="polite">
+          {mismatch && <strong className="pin-error">Пароли не совпадают.</strong>}
+          {state.message && <strong className="pin-error">{state.message}</strong>}
+        </div>
+      </section>
+    );
+  }
 
   if (state.phase === "offline") {
     return (
@@ -39,7 +107,13 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
     return (
       <section className="panel account-panel">
         <span className="eyebrow">ЛИЧНЫЙ КАБИНЕТ СЕМЬИ</span>
-        <h2>{mode === "login" ? "Вход для взрослого" : "Создать семейный кабинет"}</h2>
+        <h2>
+          {mode === "login"
+            ? "Вход для взрослого"
+            : mode === "register"
+              ? "Создать семейный кабинет"
+              : "Восстановить доступ"}
+        </h2>
         <p className="lead">
           Взрослый управляет кабинетом, а внутри создаёт отдельные профили
           детей. Прогресс открывается на любом устройстве.
@@ -59,6 +133,13 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
           >
             Регистрация
           </button>
+          <button
+            type="button"
+            className={mode === "forgot" ? "active" : ""}
+            onClick={() => setMode("forgot")}
+          >
+            Забыли пароль
+          </button>
         </div>
         <div className="sync-form">
           <label>
@@ -71,16 +152,18 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
               placeholder="parent@example.com"
             />
           </label>
-          <label>
-            Пароль
-            <input
-              type="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="не короче 10 знаков"
-            />
-          </label>
+          {mode !== "forgot" && (
+            <label>
+              Пароль
+              <input
+                type="password"
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="не короче 10 знаков"
+              />
+            </label>
+          )}
           {mode === "register" && (
             <label>
               Как вас зовут
@@ -93,22 +176,32 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
           )}
         </div>
         <div className="parent-actions">
-          <Button
-            disabled={
-              state.busy ||
-              !email ||
-              password.length < 10 ||
-              (mode === "register" && displayName.trim().length < 2)
-            }
-            onClick={() =>
-              mode === "login"
-                ? sync.signIn(email, password)
-                : sync.signUp({ email, password, displayName })
-            }
-          >
-            {mode === "login" ? <Cloud /> : <MailCheck />}
-            {mode === "login" ? "Войти" : "Создать и получить письмо"}
-          </Button>
+          {mode === "forgot" ? (
+            <Button
+              disabled={state.busy || !email.includes("@")}
+              onClick={() => sync.forgotPassword(email)}
+            >
+              <KeyRound />
+              Прислать ссылку
+            </Button>
+          ) : (
+            <Button
+              disabled={
+                state.busy ||
+                !email ||
+                password.length < 10 ||
+                (mode === "register" && displayName.trim().length < 2)
+              }
+              onClick={() =>
+                mode === "login"
+                  ? sync.signIn(email, password)
+                  : sync.signUp({ email, password, displayName })
+              }
+            >
+              {mode === "login" ? <Cloud /> : <MailCheck />}
+              {mode === "login" ? "Войти" : "Создать и получить письмо"}
+            </Button>
+          )}
           {mode === "register" && email && (
             <Button
               variant="outline"
@@ -119,6 +212,13 @@ export function SyncPanel({ sync, saved }: { sync: Sync; saved: Saved }) {
             </Button>
           )}
         </div>
+        {mode === "forgot" && (
+          <p className="fine-print">
+            Письмо приходит, только если такой кабинет существует. Ответ здесь
+            одинаковый в любом случае — по этой форме нельзя проверить, чей
+            адрес зарегистрирован.
+          </p>
+        )}
         <div aria-live="polite">
           {state.message && <strong className="pin-error">{state.message}</strong>}
         </div>

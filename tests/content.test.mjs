@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { diagnostic, missions } from "../content/tasks.ts";
+import { diagnostic, missions, missionUnlocked, nextMissionFor } from "../content/tasks.ts";
 import {
   DAYS_NOUN,
   isCorrect,
@@ -309,4 +309,34 @@ test("фокус на теме действительно даёт задачи 
     const hit = session.filter((task) => task.skill === skill).length;
     assert.ok(hit > 40, `«${skill}»: только ${hit} из 80 задач по теме`);
   }
+});
+
+test("полёты открываются друг другом, а не победой в игре", () => {
+  // Прежнее правило запирало полёты с третьего по пятнадцатый за трёхмерной
+  // игрой. Здесь проверяется, что лента проходится целиком без единой победы
+  // в игре: закрытых навсегда полётов быть не должно.
+  const completed = [];
+  const visited = [];
+  for (let guard = 0; guard < missions.length + 5; guard += 1) {
+    const next = nextMissionFor(completed);
+    if (!next) break;
+    visited.push(next.id);
+    completed.push(next.id);
+  }
+  assert.equal(visited.length, missions.length, "лента полётов обрывается");
+  assert.deepEqual(visited, missions.map((mission) => mission.id));
+  assert.equal(nextMissionFor(completed), null);
+});
+
+test("открыт ровно один следующий полёт, остальные ждут очереди", () => {
+  assert.ok(missionUnlocked(missions[0].id, []), "первый полёт закрыт");
+  const open = missions.filter((mission) => missionUnlocked(mission.id, []));
+  assert.equal(open.length, 1, "с нуля открыт не один полёт");
+
+  const completed = [missions[0].id, missions[1].id];
+  assert.ok(missionUnlocked(missions[2].id, completed));
+  assert.ok(!missionUnlocked(missions[3].id, completed), "полёт открылся через один");
+  // Пройденный полёт остаётся доступным для повтора — его состояние считает
+  // экран, а не это правило.
+  assert.ok(missionUnlocked(missions[1].id, completed));
 });

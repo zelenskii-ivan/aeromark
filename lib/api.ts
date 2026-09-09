@@ -105,6 +105,18 @@ export const resendVerification = (email: string) =>
     body: JSON.stringify({ email }),
   });
 
+export const forgotPassword = (email: string) =>
+  request<{ ok: true; message: string }>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+
+export const resetPassword = (token: string, password: string) =>
+  request<{ ok: true }>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+
 export const logout = () => request<{ ok: true }>("/auth/logout", { method: "POST" });
 
 export const me = () => request<Account>("/me");

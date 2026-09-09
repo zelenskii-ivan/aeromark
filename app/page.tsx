@@ -26,15 +26,27 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { diagnostic, missions } from "@/content/tasks";
+import {
+  diagnostic,
+  missionUnlocked,
+  missions,
+  nextMissionFor,
+} from "@/content/tasks";
 import { mathBooks, readBooks } from "@/content/method";
 import { generateSession } from "@/content/generator";
 import { lessons } from "@/content/lessons";
-import { isInteractive, stepSkill, type Lesson, type Step } from "@/content/lesson";
+import {
+  isInteractive,
+  stepSkill,
+  SUBJECTS,
+  type Lesson,
+  type Step,
+} from "@/content/lesson";
 import { LessonPlayer } from "@/app/lesson-player";
 import {
   DAYS_NOUN,
   isCorrect,
+  LESSONS_NOUN,
   MISSIONS_NOUN,
   plural,
   STARS_NOUN,
@@ -197,11 +209,10 @@ export default function Home() {
   const gameUnlocked = saved.completed.length >= 2;
   const gameComplete = saved.gameWins.includes("hangar-parts");
   const nextLesson = lessons.find((item) => !saved.completedLessons.includes(item.id));
-  const nextMission = missions.find(
-    (item) =>
-      !saved.completed.includes(item.id) &&
-      (item.id <= 2 || gameComplete),
-  );
+  // Полёт открывается предыдущим полётом, а не победой в игре: см. tasks.ts.
+  const isMissionOpen = (id: number): boolean =>
+    missionUnlocked(id, saved.completed);
+  const nextMission = nextMissionFor(saved.completed);
 
   const beginLesson = useCallback(
     (nextMode: Mode, tasks: Task[], target: Mission | null = null) => {
@@ -429,6 +440,10 @@ export default function Home() {
   }
 
   if (
+    // По ссылке «забыли пароль» родитель может прийти и уже войдя в кабинет:
+    // форму нового пароля надо показать поверх всего, иначе она осталась бы
+    // спрятанной во вкладке «Для взрослого» за родительским PIN.
+    sync.state.resetToken ||
     sync.state.phase === "unknown" ||
     sync.state.phase === "anonymous" ||
     (sync.state.phase === "offline" && !sync.state.childId) ||
@@ -441,7 +456,7 @@ export default function Home() {
             <Plane />
             <span>АЭРОМАРК</span>
           </div>
-          {sync.state.phase === "unknown" ? (
+          {sync.state.phase === "unknown" && !sync.state.resetToken ? (
             <div className="account-loading">Открываем семейный кабинет…</div>
           ) : (
             <SyncPanel sync={sync} saved={saved} />
@@ -647,7 +662,7 @@ export default function Home() {
           <div className="hero-copy">
             <p>ЛИЧНЫЙ УЧЕБНЫЙ БОРТ: {pilotName.toLocaleUpperCase("ru")}</p>
             <h1>Готов к новому полёту?</h1>
-            <span>Математика • Русский язык • Чтение</span>
+            <span>{SUBJECTS.join(" • ")}</span>
           </div>
         </div>
       </section>
@@ -669,13 +684,18 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="missions" className="tab-content">
+            {/* Пока диагностика не пройдена, «Продолжить» и «Начать отсюда» —
+                одна и та же кнопка с одним и тем же заголовком. Оставляем ту,
+                где сказано, сколько это займёт. */}
+            {saved.diagnosticDone && (
             <article className="continue-card">
               <div>
                 <span className="eyebrow">ПРОДОЛЖИТЬ С МЕСТА</span>
                 <h2>{continueTitle}</h2>
                 <p>
-                  {saved.completedLessons.length} уроков и {saved.completed.length} миссий
-                  уже пройдено. Карта курса находится ниже.
+                  Пройдено: {withCount(saved.completedLessons.length, LESSONS_NOUN)} и{" "}
+                  {withCount(saved.completed.length, MISSIONS_NOUN)}. Карта курса
+                  находится ниже.
                 </p>
               </div>
               <Button size="lg" onClick={continueCourse}>
@@ -683,6 +703,7 @@ export default function Home() {
                 <ChevronRight />
               </Button>
             </article>
+            )}
 
             {!saved.diagnosticDone ? (
               <article className="diagnostic-card">
@@ -820,7 +841,7 @@ export default function Home() {
                     ? "Пройдено — можно играть снова без награды."
                     : gameUnlocked
                       ? "Трёхмерная мини-игра открыта. Награда: 3 звезды."
-                      : "Заверши две учебные миссии, чтобы открыть игру."}
+                      : "Заверши две учебные миссии, чтобы открыть игру. Курс её не ждёт: полёты открываются друг другом."}
                 </p>
               </div>
               <Button
@@ -836,7 +857,7 @@ export default function Home() {
             <div className="mission-grid">
               {missions.map((item) => {
                 const done = saved.completed.includes(item.id);
-                const locked = item.id > 2 && !gameComplete && !done;
+                const locked = !done && !isMissionOpen(item.id);
                 return (
                   <button
                     key={item.id}
@@ -855,7 +876,7 @@ export default function Home() {
                     <footer>
                       <span>
                         {locked
-                          ? "Сначала игровой эпизод"
+                          ? `Сначала полёт ${String(item.id - 1).padStart(2, "0")}`
                           : withCount(item.tasks.length, TASKS_NOUN)}
                       </span>
                       {locked ? <Lock /> : <ChevronRight />}
