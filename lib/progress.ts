@@ -11,6 +11,22 @@ const attemptSchema = z.object({
   total: z.number().int().min(0),
 });
 
+const readingCheckSchema = z.object({
+  date: z.string(),
+  words: z.number().int().min(0),
+  errors: z.number().int().min(0),
+});
+
+const couponSchema = z.object({
+  id: z.string(),
+  prizeId: z.string(),
+  title: z.string(),
+  price: z.number().int().min(0),
+  code: z.string(),
+  createdAt: z.string(),
+  redeemedAt: z.string().nullable().default(null),
+});
+
 /**
  * Схема намеренно снисходительна: каждое поле имеет значение по умолчанию,
  * поэтому сохранение от старой версии приложения (или частично испорченное)
@@ -29,6 +45,15 @@ export const savedSchema = z.object({
   practiceAnswered: z.number().int().min(0).catch(0).default(0),
   lastPlayed: z.string().catch("").default(""),
   streak: z.number().int().min(0).catch(0).default(0),
+  // Раздел «Путь к Перспективе» (lib/route.ts).
+  routeLap: z.number().int().min(0).catch(0).default(0),
+  routeDone: z.array(z.string()).catch([]).default([]),
+  /** Остановка → дата, когда за неё последний раз дали звёзды. */
+  routeRewarded: z.record(z.string(), z.string()).catch({}).default({}),
+  readingChecks: z.array(readingCheckSchema).catch([]).default([]),
+  /** Потраченные на призы звёзды. Баланс = stars − spent. */
+  spent: z.number().int().min(0).catch(0).default(0),
+  coupons: z.array(couponSchema).catch([]).default([]),
 });
 
 export type Saved = z.infer<typeof savedSchema>;

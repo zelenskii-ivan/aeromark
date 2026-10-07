@@ -58,6 +58,8 @@ import {
 import { cancelSpeech, primeVoices, speakTask } from "@/lib/speech";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
+import { RouteSection } from "@/app/route/RouteSection";
+import { activeCoupons, balance, cancelCoupon, redeemCoupon } from "@/lib/route";
 import {
   isPersistent,
   readValue,
@@ -85,7 +87,8 @@ type Mode =
   | "mistakes"
   | "practice"
   | "lesson"
-  | "game";
+  | "game"
+  | "route";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -466,6 +469,18 @@ export default function Home() {
     );
   }
 
+  if (mode === "route") {
+    return (
+      <RouteSection
+        saved={saved}
+        setSaved={setSaved}
+        parentPin={parentPin}
+        childName={pilotName}
+        onExit={() => setMode("home")}
+      />
+    );
+  }
+
   if (mode === "game") {
     return (
       <FlightGame onExit={() => setMode("home")} onComplete={completeGame} />
@@ -681,6 +696,22 @@ export default function Home() {
               <Button size="lg" onClick={continueCourse}>
                 Продолжить
                 <ChevronRight />
+              </Button>
+            </article>
+
+            <article className="action-card route-entry">
+              <div>
+                <span className="eyebrow">ЧТЕНИЕ · ПАШКОВКА</span>
+                <h3>Путь к «Перспективе»</h3>
+                <p>
+                  Маршрут от парковки к школе, трамваю и скверу: на каждой
+                  остановке упражнение по чтению. Звёзды можно обменять на
+                  призы из кофейни. Сейчас: {withCount(balance(saved), STARS_NOUN)}.
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("route")}>
+                <BookOpen />
+                В путь
               </Button>
             </article>
 
@@ -1029,6 +1060,12 @@ export default function Home() {
                   />
                 </section>
 
+                <PrizePanel
+                  saved={saved}
+                  onRedeem={(id) => setSaved((current) => redeemCoupon(current, id))}
+                  onCancel={(id) => setSaved((current) => cancelCoupon(current, id))}
+                />
+
                 <SyncPanel sync={sync} saved={saved} />
 
                 <section className="panel">
@@ -1142,5 +1179,66 @@ function Research({
         ))}
       </div>
     </>
+  );
+}
+
+/** Призы из кофейни: взрослый отмечает выданные и видит замеры чтения. */
+function PrizePanel({
+  saved,
+  onRedeem,
+  onCancel,
+}: {
+  saved: Saved;
+  onRedeem: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  const active = activeCoupons(saved);
+  const issued = saved.coupons.filter((coupon) => coupon.redeemedAt).slice(-5).reverse();
+  const checks = saved.readingChecks.slice(-5).reverse();
+  return (
+    <section className="panel">
+      <span className="eyebrow">ПУТЬ К «ПЕРСПЕКТИВЕ»</span>
+      <h2>Призы и минута чтения</h2>
+      <p className="lead">
+        Доступно звёзд: <b>{balance(saved)}</b> (заработано всего {saved.stars},
+        потрачено {saved.spent}). Сравните код, который показывает ребёнок, и
+        отметьте приз выданным — повторно код уже не сработает.
+      </p>
+      {active.length === 0 ? (
+        <p className="lead">Невыданных призов нет.</p>
+      ) : (
+        <div className="prize-admin">
+          {active.map((coupon) => (
+            <div key={coupon.id} className="prize-admin-row">
+              <div>
+                <b>{coupon.code}</b>
+                <span>
+                  {coupon.title} · {withCount(coupon.price, STARS_NOUN)}
+                </span>
+              </div>
+              <Button onClick={() => onRedeem(coupon.id)}>
+                <Check />
+                Выдано
+              </Button>
+              <Button variant="outline" onClick={() => onCancel(coupon.id)}>
+                Вернуть звёзды
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      {issued.length > 0 && (
+        <p className="lead">
+          Недавно выдано: {issued.map((coupon) => coupon.title).join(", ")}.
+        </p>
+      )}
+      <p className="lead">
+        {checks.length
+          ? `Минута чтения: ${checks
+              .map((check) => `${check.date.slice(8, 10)}.${check.date.slice(5, 7)} — ${check.words} сл/мин, ошибок ${check.errors}`)
+              .join("; ")}.`
+          : "Замеров минуты чтения пока нет. В школе 30.09 было 8 слов в минуту."}
+      </p>
+    </section>
   );
 }
