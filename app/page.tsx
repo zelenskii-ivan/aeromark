@@ -73,6 +73,7 @@ import { isSoundOn, playMiss, playWin, setSoundOn } from "@/lib/celebrate";
 import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
+import { SiteFooter } from "@/app/site-footer";
 import { Academy } from "@/app/academy/Academy";
 import { ParentAcademy } from "@/app/academy/ParentAcademy";
 import type { Academy as AcademyState } from "@/lib/academy/state";
@@ -1202,6 +1203,7 @@ export default function Home() {
           </TabsContent>
         </Tabs>
       </div>
+      <SiteFooter />
     </main>
   );
 }
