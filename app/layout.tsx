@@ -40,6 +40,7 @@ export const metadata: Metadata = {
   },
   twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/flight-map.webp"] },
   robots: { index: true, follow: true },
+  verification: { yandex: "24c6d35f5b242ccf" },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
