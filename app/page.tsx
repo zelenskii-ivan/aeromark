@@ -21,20 +21,33 @@ import {
   Trophy,
   Upload,
   Volume2,
+  VolumeX,
   Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { diagnostic, missions } from "@/content/tasks";
+import {
+  diagnostic,
+  missionUnlocked,
+  missions,
+  nextMissionFor,
+} from "@/content/tasks";
 import { mathBooks, readBooks } from "@/content/method";
 import { generateSession } from "@/content/generator";
 import { lessons } from "@/content/lessons";
-import { isInteractive, stepSkill, type Lesson, type Step } from "@/content/lesson";
+import {
+  isInteractive,
+  stepSkill,
+  SUBJECTS,
+  type Lesson,
+  type Step,
+} from "@/content/lesson";
 import { LessonPlayer } from "@/app/lesson-player";
 import {
   DAYS_NOUN,
   isCorrect,
+  LESSONS_NOUN,
   MISSIONS_NOUN,
   plural,
   STARS_NOUN,
@@ -56,8 +69,12 @@ import {
   type Saved,
 } from "@/lib/progress";
 import { cancelSpeech, primeVoices, speakTask } from "@/lib/speech";
+import { isSoundOn, playMiss, playWin, setSoundOn } from "@/lib/celebrate";
+import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
+import { RouteSection } from "@/app/route/RouteSection";
+import { activeCoupons, balance, cancelCoupon, redeemCoupon } from "@/lib/route";
 import {
   isPersistent,
   readValue,
@@ -85,7 +102,8 @@ type Mode =
   | "mistakes"
   | "practice"
   | "lesson"
-  | "game";
+  | "game"
+  | "route";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -125,6 +143,9 @@ export default function Home() {
   const [checked, setChecked] = useState(false);
   const [right, setRight] = useState(false);
   const [starEarned, setStarEarned] = useState(false);
+  /** Растёт с каждым верным ответом: по нему пересобирается салют. */
+  const [burst, setBurst] = useState(0);
+  const [sound, setSound] = useState(true);
   const [lesson, setLesson] = useState<Lesson | null>(null);
 
   useEffect(() => {
@@ -136,6 +157,7 @@ export default function Home() {
     setParentPin(readValue(PIN_KEY) ?? "");
     setChildName(readValue(NAME_KEY) || DEFAULT_NAME);
     setPersistent(isPersistent());
+    setSound(isSoundOn());
     // setLoaded обязан выполниться при любом исходе чтения, иначе приложение
     // навсегда остаётся на заставке.
     setLoaded(true);
@@ -197,11 +219,10 @@ export default function Home() {
   const gameUnlocked = saved.completed.length >= 2;
   const gameComplete = saved.gameWins.includes("hangar-parts");
   const nextLesson = lessons.find((item) => !saved.completedLessons.includes(item.id));
-  const nextMission = missions.find(
-    (item) =>
-      !saved.completed.includes(item.id) &&
-      (item.id <= 2 || gameComplete),
-  );
+  // Полёт открывается предыдущим полётом, а не победой в игре: см. tasks.ts.
+  const isMissionOpen = (id: number): boolean =>
+    missionUnlocked(id, saved.completed);
+  const nextMission = nextMissionFor(saved.completed);
 
   const beginLesson = useCallback(
     (nextMode: Mode, tasks: Task[], target: Mission | null = null) => {
@@ -265,6 +286,14 @@ export default function Home() {
     const ok = isCorrect(response, task);
     setRight(ok);
     setChecked(true);
+    // Звук заводится здесь, внутри обработчика нажатия: браузер разрешает
+    // воспроизведение только как ответ на действие пользователя.
+    if (ok) {
+      playWin();
+      setBurst((current) => current + 1);
+    } else {
+      playMiss();
+    }
     const outcome = applyAnswer(saved, task, ok);
     setStarEarned(outcome.starEarned);
     setSaved(outcome.next);
@@ -429,6 +458,10 @@ export default function Home() {
   }
 
   if (
+    // По ссылке «забыли пароль» родитель может прийти и уже войдя в кабинет:
+    // форму нового пароля надо показать поверх всего, иначе она осталась бы
+    // спрятанной во вкладке «Для взрослого» за родительским PIN.
+    sync.state.resetToken ||
     sync.state.phase === "unknown" ||
     sync.state.phase === "anonymous" ||
     (sync.state.phase === "offline" && !sync.state.childId) ||
@@ -441,7 +474,7 @@ export default function Home() {
             <Plane />
             <span>АЭРОМАРК</span>
           </div>
-          {sync.state.phase === "unknown" ? (
+          {sync.state.phase === "unknown" && !sync.state.resetToken ? (
             <div className="account-loading">Открываем семейный кабинет…</div>
           ) : (
             <SyncPanel sync={sync} saved={saved} />
@@ -462,6 +495,18 @@ export default function Home() {
           setMode("home");
         }}
         onFinish={finishLesson}
+      />
+    );
+  }
+
+  if (mode === "route") {
+    return (
+      <RouteSection
+        saved={saved}
+        setSaved={setSaved}
+        parentPin={parentPin}
+        childName={pilotName}
+        onExit={() => setMode("home")}
       />
     );
   }
@@ -503,7 +548,8 @@ export default function Home() {
               {saved.stars}
             </div>
           </header>
-          <article className="task-card">
+          <article className={`task-card ${checked && !right ? "missed" : ""}`}>
+            <Cheer burst={right ? burst : 0} />
             <div className="task-top">
               <span className="skill-chip">{task.skill}</span>
               <Button
@@ -567,6 +613,7 @@ export default function Home() {
               {checked && (
                 <div className={`feedback ${right ? "good" : "try"}`}>
                   <strong>
+                    <span className="feedback-face">{right ? "🎉" : "🙁"}</span>
                     {right
                       ? "Верно! Отличная работа, пилот!"
                       : "Почти! Давай разберёмся."}
@@ -647,7 +694,7 @@ export default function Home() {
           <div className="hero-copy">
             <p>ЛИЧНЫЙ УЧЕБНЫЙ БОРТ: {pilotName.toLocaleUpperCase("ru")}</p>
             <h1>Готов к новому полёту?</h1>
-            <span>Математика • Русский язык • Чтение</span>
+            <span>{SUBJECTS.join(" • ")}</span>
           </div>
         </div>
       </section>
@@ -669,18 +716,40 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="missions" className="tab-content">
+            {/* Пока диагностика не пройдена, «Продолжить» и «Начать отсюда» —
+                одна и та же кнопка с одним и тем же заголовком. Оставляем ту,
+                где сказано, сколько это займёт. */}
+            {saved.diagnosticDone && (
             <article className="continue-card">
               <div>
                 <span className="eyebrow">ПРОДОЛЖИТЬ С МЕСТА</span>
                 <h2>{continueTitle}</h2>
                 <p>
-                  {saved.completedLessons.length} уроков и {saved.completed.length} миссий
-                  уже пройдено. Карта курса находится ниже.
+                  Пройдено: {withCount(saved.completedLessons.length, LESSONS_NOUN)} и{" "}
+                  {withCount(saved.completed.length, MISSIONS_NOUN)}. Карта курса
+                  находится ниже.
                 </p>
               </div>
               <Button size="lg" onClick={continueCourse}>
                 Продолжить
                 <ChevronRight />
+              </Button>
+            </article>
+            )}
+
+            <article className="action-card route-entry">
+              <div>
+                <span className="eyebrow">ЧТЕНИЕ · ПАШКОВКА</span>
+                <h3>Путь к «Перспективе»</h3>
+                <p>
+                  Маршрут от парковки к школе, трамваю и скверу: на каждой
+                  остановке упражнение по чтению. Звёзды можно обменять на
+                  призы из кофейни. Сейчас: {withCount(balance(saved), STARS_NOUN)}.
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("route")}>
+                <BookOpen />
+                В путь
               </Button>
             </article>
 
@@ -820,7 +889,7 @@ export default function Home() {
                     ? "Пройдено — можно играть снова без награды."
                     : gameUnlocked
                       ? "Трёхмерная мини-игра открыта. Награда: 3 звезды."
-                      : "Заверши две учебные миссии, чтобы открыть игру."}
+                      : "Заверши две учебные миссии, чтобы открыть игру. Курс её не ждёт: полёты открываются друг другом."}
                 </p>
               </div>
               <Button
@@ -836,7 +905,7 @@ export default function Home() {
             <div className="mission-grid">
               {missions.map((item) => {
                 const done = saved.completed.includes(item.id);
-                const locked = item.id > 2 && !gameComplete && !done;
+                const locked = !done && !isMissionOpen(item.id);
                 return (
                   <button
                     key={item.id}
@@ -855,7 +924,7 @@ export default function Home() {
                     <footer>
                       <span>
                         {locked
-                          ? "Сначала игровой эпизод"
+                          ? `Сначала полёт ${String(item.id - 1).padStart(2, "0")}`
                           : withCount(item.tasks.length, TASKS_NOUN)}
                       </span>
                       {locked ? <Lock /> : <ChevronRight />}
@@ -1007,6 +1076,25 @@ export default function Home() {
                       Сохранить
                     </Button>
                   </div>
+
+                  <h3 className="research-title">Звук</h3>
+                  <p className="lead">
+                    Короткий сигнал на верный и на неверный ответ. Салют из
+                    шаров остаётся в любом случае — он беззвучный.
+                  </p>
+                  <div className="parent-actions">
+                    <Button
+                      variant={sound ? "default" : "outline"}
+                      onClick={() => {
+                        setSoundOn(!sound);
+                        setSound(!sound);
+                        if (!sound) playWin();
+                      }}
+                    >
+                      {sound ? <Volume2 /> : <VolumeX />}
+                      {sound ? "Звук включён" : "Звук выключен"}
+                    </Button>
+                  </div>
                 </section>
 
                 <section className="panel">
@@ -1028,6 +1116,12 @@ export default function Home() {
                     rows={readBooks}
                   />
                 </section>
+
+                <PrizePanel
+                  saved={saved}
+                  onRedeem={(id) => setSaved((current) => redeemCoupon(current, id))}
+                  onCancel={(id) => setSaved((current) => cancelCoupon(current, id))}
+                />
 
                 <SyncPanel sync={sync} saved={saved} />
 
@@ -1142,5 +1236,66 @@ function Research({
         ))}
       </div>
     </>
+  );
+}
+
+/** Призы из кофейни: взрослый отмечает выданные и видит замеры чтения. */
+function PrizePanel({
+  saved,
+  onRedeem,
+  onCancel,
+}: {
+  saved: Saved;
+  onRedeem: (id: string) => void;
+  onCancel: (id: string) => void;
+}) {
+  const active = activeCoupons(saved);
+  const issued = saved.coupons.filter((coupon) => coupon.redeemedAt).slice(-5).reverse();
+  const checks = saved.readingChecks.slice(-5).reverse();
+  return (
+    <section className="panel">
+      <span className="eyebrow">ПУТЬ К «ПЕРСПЕКТИВЕ»</span>
+      <h2>Призы и минута чтения</h2>
+      <p className="lead">
+        Доступно звёзд: <b>{balance(saved)}</b> (заработано всего {saved.stars},
+        потрачено {saved.spent}). Сравните код, который показывает ребёнок, и
+        отметьте приз выданным — повторно код уже не сработает.
+      </p>
+      {active.length === 0 ? (
+        <p className="lead">Невыданных призов нет.</p>
+      ) : (
+        <div className="prize-admin">
+          {active.map((coupon) => (
+            <div key={coupon.id} className="prize-admin-row">
+              <div>
+                <b>{coupon.code}</b>
+                <span>
+                  {coupon.title} · {withCount(coupon.price, STARS_NOUN)}
+                </span>
+              </div>
+              <Button onClick={() => onRedeem(coupon.id)}>
+                <Check />
+                Выдано
+              </Button>
+              <Button variant="outline" onClick={() => onCancel(coupon.id)}>
+                Вернуть звёзды
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      {issued.length > 0 && (
+        <p className="lead">
+          Недавно выдано: {issued.map((coupon) => coupon.title).join(", ")}.
+        </p>
+      )}
+      <p className="lead">
+        {checks.length
+          ? `Минута чтения: ${checks
+              .map((check) => `${check.date.slice(8, 10)}.${check.date.slice(5, 7)} — ${check.words} сл/мин, ошибок ${check.errors}`)
+              .join("; ")}.`
+          : "Замеров минуты чтения пока нет. В школе 30.09 было 8 слов в минуту."}
+      </p>
+    </section>
   );
 }

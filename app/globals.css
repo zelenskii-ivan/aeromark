@@ -1163,3 +1163,99 @@ body {
   color: var(--accent);
   opacity: 1;
 }
+
+/* --- Отклик на ответ: салют за верный, мягкое покачивание за неверный --- */
+.task-card {
+  position: relative;
+}
+.cheer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.cheer span {
+  position: absolute;
+  bottom: -40px;
+  animation-timing-function: ease-out;
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+.cheer-balloon {
+  width: 26px;
+  height: 32px;
+  border-radius: 50% 50% 46% 46%;
+  background: hsl(var(--hue) 82% 62%);
+  box-shadow: inset -5px -4px 0 hsl(var(--hue) 72% 52%);
+  animation-name: cheer-rise;
+}
+/* Нитка: без неё шар читается как просто цветное пятно. */
+.cheer-balloon::after {
+  content: "";
+  position: absolute;
+  top: 32px;
+  left: 50%;
+  width: 1px;
+  height: 14px;
+  background: hsl(var(--hue) 45% 55% / 0.7);
+}
+.cheer-confetti {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  background: hsl(var(--hue) 85% 58%);
+  animation-name: cheer-toss;
+}
+@keyframes cheer-rise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.6);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift), -340px, 0) scale(1);
+    opacity: 0;
+  }
+}
+@keyframes cheer-toss {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift), -260px, 0) rotate(var(--spin));
+    opacity: 0;
+  }
+}
+/* Ошибка: карточка коротко качнулась и замерла. Без красного мигания —
+   ребёнок ошибается постоянно, и наказывать за это нельзя. */
+.task-card.missed {
+  animation: card-sway 0.42s ease-in-out;
+}
+@keyframes card-sway {
+  0%, 100% { transform: translateX(0); }
+  22% { transform: translateX(-7px); }
+  55% { transform: translateX(6px); }
+  80% { transform: translateX(-3px); }
+}
+.feedback-face {
+  font-size: 26px;
+  line-height: 1;
+  margin-right: 8px;
+  vertical-align: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cheer {
+    display: none;
+  }
+  .task-card.missed {
+    animation: none;
+  }
+}

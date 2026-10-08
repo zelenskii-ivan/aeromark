@@ -18,6 +18,9 @@ import {
 } from "./auth.js";
 import { hashPassword, hashToken, normalizeInvite, randomToken } from "./security.js";
 import {
+  resetExpiresAt,
+  sendExistingAccountEmail,
+  sendPasswordResetEmail,
   sendVerificationEmail,
   verificationExpiresAt,
 } from "./email.js";
@@ -83,6 +86,29 @@ app.post(
       })
       .parse(request.body);
     const email = body.email.trim().toLowerCase();
+
+    /**
+     * Ответ на занятый адрес неотличим от ответа на свободный.
+     *
+     * Раньше занятый адрес отдавал 409 «Такой email уже зарегистрирован», и по
+     * форме регистрации можно было проверить, есть ли у конкретного человека
+     * здесь кабинет. Для детского сервиса это лишнее знание о чужой семье.
+     * Владелец адреса узнаёт о попытке из письма, а не из чужого экрана.
+     */
+    const existing = await db.query<{ id: string; display_name: string }>(
+      "SELECT id, display_name FROM parents WHERE email=$1",
+      [email],
+    );
+    if (existing.rows[0]) {
+      const parent = existing.rows[0];
+      try {
+        await sendExistingAccountEmail({ email, displayName: parent.display_name });
+      } catch (error) {
+        app.log.error({ error, email }, "письмо о занятом адресе не отправлено");
+      }
+      return reply.code(201).send({ ok: true, needsVerification: true });
+    }
+
     const client = await db.connect();
     const verificationToken = randomToken();
     try {
@@ -101,9 +127,9 @@ app.post(
         ],
       );
       await client.query(
-        `INSERT INTO email_verification_tokens
-           (id,parent_id,token_hash,expires_at)
-         VALUES($1,$2,$3,$4)`,
+        `INSERT INTO email_tokens
+           (id,parent_id,purpose,token_hash,expires_at)
+         VALUES($1,$2,'verify',$3,$4)`,
         [
           randomUUID(),
           parentId,
@@ -127,8 +153,9 @@ app.post(
       return reply.code(201).send({ ok: true, needsVerification: true });
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
+      // Две регистрации на один адрес столкнулись — отвечаем как на занятый.
       if ((error as { code?: string })?.code === "23505") {
-        return reply.code(409).send({ error: "Такой email уже зарегистрирован" });
+        return reply.code(201).send({ ok: true, needsVerification: true });
       }
       throw error;
     } finally {
@@ -155,13 +182,14 @@ app.post(
     if (parent && !parent.email_verified_at) {
       const token = randomToken();
       await db.query(
-        "UPDATE email_verification_tokens SET used_at=now() WHERE parent_id=$1 AND used_at IS NULL",
+        `UPDATE email_tokens SET used_at=now()
+          WHERE parent_id=$1 AND purpose='verify' AND used_at IS NULL`,
         [parent.id],
       );
       await db.query(
-        `INSERT INTO email_verification_tokens
-           (id,parent_id,token_hash,expires_at)
-         VALUES($1,$2,$3,$4)`,
+        `INSERT INTO email_tokens
+           (id,parent_id,purpose,token_hash,expires_at)
+         VALUES($1,$2,'verify',$3,$4)`,
         [randomUUID(), parent.id, hashToken(token), verificationExpiresAt()],
       );
       try {
@@ -192,8 +220,9 @@ app.post(
       await client.query("BEGIN");
       const result = await client.query<{ id: string; parent_id: string }>(
         `SELECT id,parent_id
-           FROM email_verification_tokens
-          WHERE token_hash=$1 AND used_at IS NULL AND expires_at > now()
+           FROM email_tokens
+          WHERE token_hash=$1 AND purpose='verify'
+            AND used_at IS NULL AND expires_at > now()
           FOR UPDATE`,
         [hashToken(body.token)],
       );
@@ -207,11 +236,117 @@ app.post(
         [verification.parent_id],
       );
       await client.query(
-        "UPDATE email_verification_tokens SET used_at=now() WHERE parent_id=$1 AND used_at IS NULL",
+        `UPDATE email_tokens SET used_at=now()
+          WHERE parent_id=$1 AND purpose='verify' AND used_at IS NULL`,
         [verification.parent_id],
       );
       await client.query("COMMIT");
       await createSession(verification.parent_id, reply);
+      return { ok: true };
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+);
+
+/**
+ * Забыли пароль. Ответ одинаков для любого адреса — существующего и
+ * выдуманного, — иначе эта форма превращается в проверку «есть ли здесь
+ * аккаунт у этого человека».
+ */
+app.post(
+  "/api/auth/forgot-password",
+  { config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } },
+  async (request, reply) => {
+    const body = z.object({ email: z.string().email().max(200) }).parse(request.body);
+    const email = body.email.trim().toLowerCase();
+    const result = await db.query<{ id: string; display_name: string }>(
+      `SELECT p.id, p.display_name
+         FROM parents p JOIN families f ON f.id = p.family_id
+        WHERE p.email = $1 AND f.status = 'active'`,
+      [email],
+    );
+    const parent = result.rows[0];
+    if (parent) {
+      const token = randomToken();
+      // Живая ссылка на смену ровно одна: новое письмо гасит предыдущее,
+      // иначе старое письмо в ящике работало бы, пока не истечёт срок.
+      await db.query(
+        `UPDATE email_tokens SET used_at=now()
+          WHERE parent_id=$1 AND purpose='reset' AND used_at IS NULL`,
+        [parent.id],
+      );
+      await db.query(
+        `INSERT INTO email_tokens
+           (id,parent_id,purpose,token_hash,expires_at)
+         VALUES($1,$2,'reset',$3,$4)`,
+        [randomUUID(), parent.id, hashToken(token), resetExpiresAt()],
+      );
+      try {
+        await sendPasswordResetEmail({
+          email,
+          displayName: parent.display_name,
+          token,
+        });
+      } catch (error) {
+        app.log.error({ error, email }, "письмо со сменой пароля не отправлено");
+      }
+    }
+    return reply.send({
+      ok: true,
+      message: "Если адрес зарегистрирован, письмо со ссылкой уже отправлено.",
+    });
+  },
+);
+
+app.post(
+  "/api/auth/reset-password",
+  { config: { rateLimit: { max: 10, timeWindow: "15 minutes" } } },
+  async (request, reply) => {
+    const body = z
+      .object({
+        token: z.string().min(32).max(200),
+        password: z.string().min(10).max(128),
+      })
+      .parse(request.body);
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      const found = await client.query<{ parent_id: string }>(
+        `SELECT parent_id
+           FROM email_tokens
+          WHERE token_hash=$1 AND purpose='reset'
+            AND used_at IS NULL AND expires_at > now()
+          FOR UPDATE`,
+        [hashToken(body.token)],
+      );
+      const reset = found.rows[0];
+      if (!reset) {
+        await client.query("ROLLBACK");
+        return reply.code(400).send({ error: "Ссылка недействительна или устарела" });
+      }
+      // Переход по ссылке доказывает владение адресом — заодно подтверждаем
+      // почту, если родитель так и не открыл первое письмо.
+      await client.query(
+        `UPDATE parents
+            SET password_hash=$1,
+                email_verified_at=COALESCE(email_verified_at, now())
+          WHERE id=$2`,
+        [await hashPassword(body.password), reset.parent_id],
+      );
+      await client.query(
+        `UPDATE email_tokens SET used_at=now()
+          WHERE parent_id=$1 AND purpose='reset' AND used_at IS NULL`,
+        [reset.parent_id],
+      );
+      // Смена пароля обязана выкидывать все сессии: иначе тот, кто увёл
+      // аккаунт, продолжает сидеть в нём после «восстановления».
+      await client.query("DELETE FROM sessions WHERE parent_id=$1", [reset.parent_id]);
+      await client.query("COMMIT");
+      await createSession(reset.parent_id, reply);
       return { ok: true };
     } catch (error) {
       await client.query("ROLLBACK").catch(() => {});
@@ -434,7 +569,7 @@ const purgeSessions = async () => {
   try {
     await db.query("DELETE FROM sessions WHERE expires_at <= now()");
     await db.query(
-      "DELETE FROM email_verification_tokens WHERE expires_at <= now() OR used_at < now() - interval '7 days'",
+      "DELETE FROM email_tokens WHERE expires_at <= now() OR used_at < now() - interval '7 days'",
     );
   } catch (error) {
     app.log.warn({ error }, "не удалось очистить протухшие сессии");

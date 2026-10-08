@@ -110,3 +110,4 @@ export const TASKS_NOUN: Noun = ["задание", "задания", "задан
 export const STARS_NOUN: Noun = ["звезда", "звезды", "звёзд"];
 export const MISSIONS_NOUN: Noun = ["миссия", "миссии", "миссий"];
 export const DAYS_NOUN: Noun = ["день", "дня", "дней"];
+export const LESSONS_NOUN: Noun = ["урок", "урока", "уроков"];

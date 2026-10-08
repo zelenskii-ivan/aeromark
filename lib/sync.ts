@@ -25,6 +25,8 @@ export type SyncState = {
   busy: boolean;
   message: string;
   savedAt: string;
+  /** Токен из письма «забыли пароль» — панель показывает форму нового пароля. */
+  resetToken: string | null;
 };
 
 const emptyState: SyncState = {
@@ -37,6 +39,7 @@ const emptyState: SyncState = {
   busy: false,
   message: "",
   savedAt: "",
+  resetToken: null,
 };
 
 function describe(error: unknown): string {
@@ -230,8 +233,50 @@ export function useSync(saved: Saved, restore: (next: Saved) => void) {
     [patch],
   );
 
+  const forgotPassword = useCallback(
+    async (email: string) => {
+      patch({ busy: true, message: "" });
+      try {
+        const result = await api.forgotPassword(email);
+        patch({ busy: false, message: result.message });
+      } catch (error) {
+        patch({ busy: false, message: describe(error) });
+      }
+    },
+    [patch],
+  );
+
+  const resetPassword = useCallback(
+    async (token: string, password: string) => {
+      patch({ busy: true, message: "" });
+      try {
+        await api.resetPassword(token, password);
+        window.history.replaceState({}, "", window.location.pathname);
+        await loadAccount();
+        patch({ busy: false, resetToken: null, message: "Пароль изменён, вы вошли." });
+      } catch (error) {
+        patch({ busy: false, message: describe(error) });
+      }
+    },
+    [loadAccount, patch],
+  );
+
+  const cancelReset = useCallback(() => {
+    window.history.replaceState({}, "", window.location.pathname);
+    patch({ resetToken: null, message: "" });
+  }, [patch]);
+
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("verify_email");
+    const params = new URLSearchParams(window.location.search);
+    const reset = params.get("reset_password");
+    if (reset) {
+      // Токен из адресной строки не тратим сразу: сначала родитель вводит
+      // новый пароль. Из адреса он уйдёт после смены — или по отмене.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      patch({ resetToken: reset });
+      return;
+    }
+    const token = params.get("verify_email");
     if (!token) return;
     const verify = async () => {
       patch({ busy: true, message: "Подтверждаем почту…" });
@@ -319,6 +364,9 @@ export function useSync(saved: Saved, restore: (next: Saved) => void) {
     signIn,
     signUp,
     resendVerification,
+    forgotPassword,
+    resetPassword,
+    cancelReset,
     signOut,
     addChild,
     selectChild,

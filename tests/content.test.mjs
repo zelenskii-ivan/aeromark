@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { diagnostic, missions } from "../content/tasks.ts";
+import { diagnostic, missions, missionUnlocked, nextMissionFor } from "../content/tasks.ts";
 import {
   DAYS_NOUN,
   isCorrect,
@@ -137,11 +137,35 @@ test("ударение проговаривается словами", () => {
   assert.equal(prepareSpeech("пи́лот"), "пилот, с ударением на и");
 });
 
-test("варианты ответа перечисляются словами, а не номерами с точкой", () => {
-  const speech = speechForTask(diagnostic[0]);
-  assert.match(speech, /Первый вариант/);
-  assert.match(speech, /Второй вариант/);
-  assert.doesNotMatch(speech, /1\./, "«1.» читается как «один точка»");
+test("вслух читается задание, а не варианты ответа", () => {
+  // Голос перечислял варианты, и задание тонуло в списке. Варианты остаются
+  // на экране: их читают глазами.
+  const withOptions = [
+    ...diagnostic,
+    ...missions.flatMap((mission) => mission.tasks),
+  ].filter((task) => task.options.length && !task.speech);
+  assert.ok(withOptions.length > 20, "нечего проверять");
+  for (const task of withOptions) {
+    const speech = speechForTask(task);
+    assert.doesNotMatch(speech, /вариант/i, `${task.id}: в озвучке перечислены варианты`);
+    assert.ok(speech.length > 0, `${task.id}: задание не озвучивается вовсе`);
+    // Точная проверка: реплика та же, что у задачи без вариантов вовсе, минус
+    // подсказка про поле ввода. Сравнение по вхождению слов здесь врёт —
+    // вариант может дословно повторять кусок вопроса.
+    const bare = speechForTask({ ...task, options: [] }).replace(
+      /\s*Введи ответ в поле\.$/,
+      "",
+    );
+    assert.equal(speech, bare, `${task.id}: в реплику попало что-то кроме задания`);
+  }
+});
+
+test("задание с полем ввода объясняет, как отвечать", () => {
+  const typed = [...diagnostic, ...missions.flatMap((m) => m.tasks)].find(
+    (task) => !task.options.length && !task.speech,
+  );
+  assert.ok(typed, "нет ни одной задачи со свободным вводом");
+  assert.match(speechForTask(typed), /Введи ответ в поле/);
 });
 
 test("в реплику не попадает ничего, кроме букв, цифр и обычной пунктуации", () => {
@@ -285,4 +309,34 @@ test("фокус на теме действительно даёт задачи 
     const hit = session.filter((task) => task.skill === skill).length;
     assert.ok(hit > 40, `«${skill}»: только ${hit} из 80 задач по теме`);
   }
+});
+
+test("полёты открываются друг другом, а не победой в игре", () => {
+  // Прежнее правило запирало полёты с третьего по пятнадцатый за трёхмерной
+  // игрой. Здесь проверяется, что лента проходится целиком без единой победы
+  // в игре: закрытых навсегда полётов быть не должно.
+  const completed = [];
+  const visited = [];
+  for (let guard = 0; guard < missions.length + 5; guard += 1) {
+    const next = nextMissionFor(completed);
+    if (!next) break;
+    visited.push(next.id);
+    completed.push(next.id);
+  }
+  assert.equal(visited.length, missions.length, "лента полётов обрывается");
+  assert.deepEqual(visited, missions.map((mission) => mission.id));
+  assert.equal(nextMissionFor(completed), null);
+});
+
+test("открыт ровно один следующий полёт, остальные ждут очереди", () => {
+  assert.ok(missionUnlocked(missions[0].id, []), "первый полёт закрыт");
+  const open = missions.filter((mission) => missionUnlocked(mission.id, []));
+  assert.equal(open.length, 1, "с нуля открыт не один полёт");
+
+  const completed = [missions[0].id, missions[1].id];
+  assert.ok(missionUnlocked(missions[2].id, completed));
+  assert.ok(!missionUnlocked(missions[3].id, completed), "полёт открылся через один");
+  // Пройденный полёт остаётся доступным для повтора — его состояние считает
+  // экран, а не это правило.
+  assert.ok(missionUnlocked(missions[1].id, completed));
 });
