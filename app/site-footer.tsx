@@ -8,6 +8,11 @@ import { Mail, Plane } from "lucide-react";
 export function SiteFooter() {
   return (
     <footer className="site-footer">
+      <p className="site-footer-lead">
+        <b>Аэромарк</b> — бесплатный тренажёр для первоклассника: чтение по слогам
+        с озвучкой, буквы и звуки, слова и короткие рассказы, счёт до 20 и
+        русский язык. Работает в браузере на телефоне, планшете и компьютере.
+      </p>
       <div className="site-footer-inner">
         <section>
           <h2>

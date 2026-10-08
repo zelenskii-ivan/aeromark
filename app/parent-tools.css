@@ -231,3 +231,11 @@
     grid-template-columns: 1fr;
   }
 }
+.site-footer-lead {
+  margin: 0 0 22px !important;
+  font-size: 16px;
+}
+/* На экранах заданий подвал не нужен — только на главной и при загрузке. */
+body:has(.lesson, .ac-screen, .game-shell) .site-footer {
+  display: none;
+}
