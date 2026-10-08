@@ -73,6 +73,9 @@ import { isSoundOn, playMiss, playWin, setSoundOn } from "@/lib/celebrate";
 import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
+import { Academy } from "@/app/academy/Academy";
+import { ParentAcademy } from "@/app/academy/ParentAcademy";
+import type { Academy as AcademyState } from "@/lib/academy/state";
 import {
   isPersistent,
   readValue,
@@ -100,7 +103,8 @@ type Mode =
   | "mistakes"
   | "practice"
   | "lesson"
-  | "game";
+  | "game"
+  | "academy";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -496,6 +500,19 @@ export default function Home() {
     );
   }
 
+  if (mode === "academy") {
+    return (
+      <Academy
+        academy={saved.academy}
+        update={(fn: (current: AcademyState) => AcademyState) =>
+          setSaved((current) => ({ ...current, academy: fn(current.academy) }))
+        }
+        pilotName={pilotName}
+        onExit={() => setMode("home")}
+      />
+    );
+  }
+
   if (mode === "game") {
     return (
       <FlightGame onExit={() => setMode("home")} onComplete={completeGame} />
@@ -701,6 +718,22 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="missions" className="tab-content">
+            <article className="action-card academy-entry">
+              <div>
+                <span className="eyebrow">ЧТЕНИЕ</span>
+                <h2>Академия пилотов</h2>
+                <p>
+                  Буквы, слоги, слова и рассказы — шаг за шагом, с голосом
+                  штурмана и самолётами в ангаре. Звёзд в Академии:{" "}
+                  {saved.academy.stars}.
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("academy")}>
+                <BookOpen />
+                В Академию
+              </Button>
+            </article>
+
             {/* Пока диагностика не пройдена, «Продолжить» и «Начать отсюда» —
                 одна и та же кнопка с одним и тем же заголовком. Оставляем ту,
                 где сказано, сколько это займёт. */}
@@ -1085,6 +1118,8 @@ export default function Home() {
                     rows={readBooks}
                   />
                 </section>
+
+                <ParentAcademy academy={saved.academy} />
 
                 <SyncPanel sync={sync} saved={saved} />
 

@@ -9,6 +9,7 @@
 | --- | --- |
 | `app/` | Next.js App Router: главный экран, урок, 3D-игра на three.js |
 | `content/` | Уроки, задачи диагностики и миссий, генератор примеров |
+| `app/academy/`, `lib/academy/`, `content/academy/` | Академия пилотов — раздел чтения, см. [docs/READING_ACADEMY.md](docs/READING_ACADEMY.md) |
 | `docs/METHODOLOGY.md` | Чему и в каком порядке учит приложение и почему |
 | `lib/` | Прогресс, синтез речи, клиент API и синхронизация |
 | `server/` | Fastify + PostgreSQL: семейные кабинеты, подтверждение почты, серверный прогресс |
