@@ -91,7 +91,7 @@ export function SpeakButton({
 
 /** Переключатель скорости озвучки: улитка / кролик. */
 export function RateToggle() {
-  const [rate, setValue] = useState(1);
+  const [rate, setValue] = useState<number>(1);
   useEffect(() => {
     // Читаем после монтирования: на сервере localStorage нет.
     // eslint-disable-next-line react-hooks/set-state-in-effect

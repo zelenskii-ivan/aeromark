@@ -16,14 +16,19 @@ import { audioKey } from "./audio-key.ts";
  */
 
 export const RATE_KEY = "aeromark-voice-rate";
+/**
+ * Обычный темп — по умолчанию: записи уже сделаны чуть медленнее живой речи.
+ * «Медленно» — на 15%, не больше: сильнее замедленная речь растягивается и
+ * звучит неестественно, слоги разобрать труднее, а не легче.
+ */
 export const RATES = [
-  { value: 0.75, label: "Медленно" },
+  { value: 0.85, label: "Медленно" },
   { value: 1, label: "Обычно" },
 ] as const;
 
 export function getRate(): number {
   const raw = Number(readValue(RATE_KEY));
-  return RATES.some((rate) => rate.value === raw) ? raw : 0.75;
+  return RATES.some((rate) => rate.value === raw) ? raw : 1;
 }
 
 export function setRate(value: number): void {

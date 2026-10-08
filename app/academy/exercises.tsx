@@ -317,7 +317,7 @@ export function ExerciseView({ exercise, onDone }: { exercise: Exercise; onDone:
           options={exercise.options.map(syllableOption)}
           answer={exercise.syllable}
           layout="letters"
-          hint={{ label: "Медленнее", onUse: () => void play(exercise.syllable, 0.6) }}
+          hint={{ label: "Медленнее", onUse: () => void play(exercise.syllable, 0.85) }}
           onDone={onDone}
         />
       );
@@ -335,7 +335,7 @@ export function ExerciseView({ exercise, onDone }: { exercise: Exercise; onDone:
             label: "По слогам",
             content: exercise.parts.length > 1 ? <SyllableSplit parts={exercise.parts.map((p) => p.toUpperCase())} /> : null,
             onUse: () => {
-              if (exercise.parts.length <= 1) void play(exercise.word, 0.6);
+              if (exercise.parts.length <= 1) void play(exercise.word, 0.85);
             },
           }}
           onDone={onDone}
