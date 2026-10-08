@@ -162,32 +162,3 @@
     align-self: flex-start;
   }
 }
-
-/* Призы из кофейни в кабинете взрослого */
-.prize-admin {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 12px 0;
-}
-.prize-admin-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--muted);
-}
-.prize-admin-row > div {
-  flex: 1 1 160px;
-  display: flex;
-  flex-direction: column;
-}
-.prize-admin-row b {
-  font-size: 24px;
-  letter-spacing: 0.1em;
-}
-.prize-admin-row span {
-  color: var(--muted-foreground);
-}
