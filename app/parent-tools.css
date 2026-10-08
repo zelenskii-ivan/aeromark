@@ -162,3 +162,80 @@
     align-self: flex-start;
   }
 }
+
+/* Подвал сайта */
+.site-footer {
+  margin-top: 40px;
+  padding: 32px max(16px, calc((100vw - 1152px) / 2)) 24px;
+  background: #0b3a5c;
+  color: #e6f4ff;
+}
+.site-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 28px;
+}
+.site-footer h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: #fff;
+}
+.site-footer h2 svg {
+  width: 20px;
+  color: #ffcf4a;
+}
+.site-footer p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+  color: #cfe6f7;
+}
+.site-footer b {
+  color: #fff;
+}
+.site-footer-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: #ffffff1a;
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  word-break: break-all;
+}
+.site-footer-link:hover {
+  background: #ffffff2e;
+}
+.site-footer-link svg {
+  width: 18px;
+  flex: none;
+}
+.site-footer-note {
+  margin-top: 12px !important;
+  font-size: 14px;
+}
+.site-footer-copy {
+  margin: 24px 0 0 !important;
+  padding-top: 16px;
+  border-top: 1px solid #ffffff26;
+  font-size: 13px;
+  color: #9cc3df !important;
+}
+@media (max-width: 720px) {
+  .site-footer-inner {
+    grid-template-columns: 1fr;
+  }
+}
+.site-footer-lead {
+  margin: 0 0 22px !important;
+  font-size: 16px;
+}
+/* На экранах заданий подвал не нужен — только на главной и при загрузке. */
+body:has(.lesson, .ac-screen, .game-shell) .site-footer {
+  display: none;
+}

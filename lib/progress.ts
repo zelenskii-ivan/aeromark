@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { readValue } from "./storage.ts";
+import { academySchema, initialAcademy } from "./academy/state.ts";
 import type { Skill, Task } from "../content/types.ts";
 
 export const PROGRESS_KEY = "aeromark-progress";
@@ -29,6 +30,8 @@ export const savedSchema = z.object({
   practiceAnswered: z.number().int().min(0).catch(0).default(0),
   lastPlayed: z.string().catch("").default(""),
   streak: z.number().int().min(0).catch(0).default(0),
+  /** Академия пилотов (lib/academy). Старое сохранение без неё дочитывается. */
+  academy: academySchema.catch(initialAcademy).default(initialAcademy),
 });
 
 export type Saved = z.infer<typeof savedSchema>;

@@ -7,7 +7,7 @@
  * Прошлая версия кешировала HTML первым делом и намертво замораживала
  * приложение до ручного повышения номера кеша.
  */
-const VERSION = "aeromark-v7";
+const VERSION = "aeromark-v8";
 const CORE = [
   "/",
   "/flight-map.webp",
@@ -66,12 +66,44 @@ self.addEventListener("message", (event) => {
 });
 
 const putInCache = async (request, response) => {
-  if (response && response.ok && response.type === "basic") {
+  // Кешируем только полный ответ: частичный (206 на Range-запрос) Cache API
+  // не принимает — cache.put бросал исключение, и браузер получал ошибку
+  // вместо файла. Так на сайте не играл ни один звук.
+  if (response && response.status === 200 && response.type === "basic") {
     const cache = await caches.open(VERSION);
     await cache.put(request, response.clone());
   }
   return response;
 };
+
+async function audioResponse(request) {
+  const cache = await caches.open(VERSION);
+  let full = await cache.match(request.url);
+  if (!full) {
+    try {
+      full = await fetch(request.url);
+      if (full.status === 200) await cache.put(request.url, full.clone());
+    } catch {
+      return Response.error();
+    }
+  }
+  const range = request.headers.get("range");
+  if (!range || full.status !== 200) return full;
+  const body = await full.arrayBuffer();
+  const match = /bytes=(\d*)-(\d*)/.exec(range);
+  const start = match && match[1] ? Number(match[1]) : 0;
+  const end = match && match[2] ? Math.min(Number(match[2]), body.byteLength - 1) : body.byteLength - 1;
+  return new Response(body.slice(start, end + 1), {
+    status: 206,
+    statusText: "Partial Content",
+    headers: {
+      "Content-Type": full.headers.get("Content-Type") || "audio/mpeg",
+      "Content-Range": `bytes ${start}-${end}/${body.byteLength}`,
+      "Content-Length": String(end - start + 1),
+      "Accept-Ranges": "bytes",
+    },
+  });
+}
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
@@ -92,6 +124,14 @@ self.addEventListener("fetch", (event) => {
         .then((response) => putInCache(request, response))
         .catch(async () => (await caches.match(request)) ?? caches.match("/")),
     );
+    return;
+  }
+
+  // Записи Академии: имя файла — хеш содержимого, поэтому кеш навсегда.
+  // Плеер просит файл частями (Range); отвечаем из целого файла в кеше,
+  // нарезая нужный кусок сами — иначе Safari на iPhone звук не играет.
+  if (url.pathname.startsWith("/audio/")) {
+    event.respondWith(audioResponse(request));
     return;
   }
 
