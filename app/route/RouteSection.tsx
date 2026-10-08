@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronLeft, Coffee, Gift, Lock, Star, Timer, TrendingUp } from "lucide-react";
+import { Check, ChevronLeft, Coffee, Gift, Lock, Star, Timer, TimerReset, TrendingUp } from "lucide-react";
 import {
   PRIZES,
   READING_GOAL,
   SCHOOL_BASELINE,
   SHOP_NAME,
   STATIONS,
+  STORIES,
+  TABLE_SIZE,
+  TIMED_RECORD_STARS,
+  TIMED_STARS,
   type Prize,
   type Station,
 } from "@/content/route";
@@ -26,14 +30,23 @@ import {
   routeOrder,
   stationStatus,
   storyFor,
+  formatSeconds,
+  minSeconds,
+  recordTimedRun,
+  storyTimedTarget,
+  tableTimedTarget,
+  timedHistory,
   type Coupon,
+  type TimedTarget,
 } from "@/lib/route";
 import {
   CoupleStation,
   EndingsStation,
   MinuteCheck,
   SpeakButton,
+  Stopwatch,
   StoryStation,
+  SyllableText,
   TableStation,
   WordsStation,
 } from "./stations";
@@ -42,7 +55,9 @@ import "./route.css";
 type View =
   | { name: "map" }
   | { name: "station"; station: Station }
-  | { name: "reward"; station: Station; stars: number; lapDone: boolean }
+  | { name: "reward"; station: Station; stars: number; lapDone: boolean; note?: string }
+  | { name: "timed" }
+  | { name: "timed-done"; seconds: number; stars: number; record: boolean; previous: number | null; tooFast: boolean; min: number }
   | { name: "minute-gate" }
   | { name: "minute" }
   | { name: "minute-done"; words: number; errors: number; stars: number; record: boolean }
@@ -75,11 +90,33 @@ export function RouteSection({
 
   const back = () => setView({ name: "map" });
 
-  const finishStation = (station: Station) => {
-    const outcome = completeStation(saved, station.id, date);
+  const finishStation = (station: Station, base = saved, extraStars = 0, note?: string) => {
+    const outcome = completeStation(base, station.id, date);
     setSaved(outcome.next);
-    setView({ name: "reward", station, stars: outcome.starsEarned, lapDone: outcome.lapDone });
+    setView({
+      name: "reward",
+      station,
+      stars: outcome.starsEarned + extraStars,
+      lapDone: outcome.lapDone,
+      note,
+    });
   };
+
+  /** Таблица в школе тоже идёт на время: её рекорд — в общем секундомере. */
+  const finishTable = (station: Station, seconds: number) => {
+    const timed = recordTimedRun(saved, tableTimedTarget(TABLE_SIZE), seconds, date);
+    const note = timed.tooFast
+      ? undefined
+      : timed.record
+        ? `Новый рекорд таблицы: ${formatSeconds(seconds)}!`
+        : timed.previousBest === null
+          ? `Время таблицы: ${formatSeconds(seconds)}. Это твой первый рекорд.`
+          : `Время таблицы: ${formatSeconds(seconds)}. Рекорд — ${formatSeconds(timed.previousBest)}.`;
+    finishStation(station, timed.next, timed.starsEarned, note);
+  };
+
+  const story = storyFor(saved);
+  const storyTarget = storyTimedTarget(story);
 
   const header = (title: string, eyebrow?: string, onBack = back) => (
     <header className="route-head">
@@ -106,7 +143,9 @@ export function RouteSection({
         <SpeakButton text={station.instruction} />
         <p className="route-instruction">{station.instruction}</p>
         {station.kind === "couple" && <CoupleStation onDone={done} seed={date} />}
-        {station.kind === "table" && <TableStation onDone={done} seed={date} />}
+        {station.kind === "table" && (
+          <TableStation onDone={(seconds) => finishTable(station, seconds)} seed={date} />
+        )}
         {station.kind === "words" && <WordsStation onDone={done} seed={date} />}
         {station.kind === "endings" && <EndingsStation onDone={done} seed={date} />}
         {station.kind === "story" && <StoryStation onDone={done} story={storyFor(saved)} />}
@@ -128,6 +167,7 @@ export function RouteSection({
               ? `+${withCount(view.stars, STARS_NOUN)}`
               : "Звёзды за эту остановку сегодня уже были. Тренировка всё равно засчитана."}
           </p>
+          {view.note && <p className="route-note strong">{view.note}</p>}
           {view.lapDone && (
             <p className="route-note">
               {isReturnTrip(saved)
@@ -142,6 +182,86 @@ export function RouteSection({
               onClick={() => setView({ name: "station", station: nextStation })}
             >
               Дальше: {nextStation.place}
+            </button>
+            <button type="button" className="route-btn soft" onClick={back}>
+              На карту
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (view.name === "timed") {
+    return (
+      <main className="route">
+        {header("Читаю на время", "СЕКУНДОМЕР")}
+        <p className="route-instruction">
+          Нажми «Старт», прочитай рассказ вслух до конца и нажми «Стоп». Читай этот рассказ
+          каждый день — и смотри, как время становится меньше.
+        </p>
+        <Stopwatch
+          best={saved.timedBest[storyTarget.key] ?? null}
+          onFinish={(seconds) => {
+            const outcome = recordTimedRun(saved, storyTarget, seconds, date);
+            setSaved(outcome.next);
+            setView({
+              name: "timed-done",
+              seconds,
+              stars: outcome.starsEarned,
+              record: outcome.record,
+              previous: outcome.previousBest,
+              tooFast: outcome.tooFast,
+              min: minSeconds(storyTarget),
+            });
+          }}
+        >
+          <SyllableText text={story.text} />
+        </Stopwatch>
+      </main>
+    );
+  }
+
+  if (view.name === "timed-done") {
+    const history = timedHistory(saved, storyTarget.key);
+    return (
+      <main className="route">
+        <section className="route-reward">
+          <div className={`reward-badge ${view.tooFast ? "warn" : ""}`}>
+            <TimerReset aria-hidden="true" />
+          </div>
+          <h1>
+            {view.tooFast
+              ? "Слишком быстро!"
+              : view.record
+                ? "Новый рекорд!"
+                : formatSeconds(view.seconds)}
+          </h1>
+          {view.tooFast ? (
+            <p className="route-note">
+              Так быстро рассказ вслух не прочитать — меньше {view.min} сек. Прочитай его весь, до
+              последнего слова, и нажми «Стоп» в конце.
+            </p>
+          ) : (
+            <>
+              <p>
+                {view.stars > 0
+                  ? `+${withCount(view.stars, STARS_NOUN)}`
+                  : "Звёзды за этот рассказ сегодня уже были — но рекорд засчитан."}
+              </p>
+              <p className="route-note">
+                {view.record && view.previous !== null
+                  ? `${formatSeconds(view.seconds)} — на ${Math.max(1, Math.round(view.previous - view.seconds))} сек быстрее, чем было.`
+                  : view.previous === null
+                    ? "Это твой первый рекорд. Завтра попробуй быстрее!"
+                    : `Рекорд — ${formatSeconds(view.previous)}. Чтобы побить, нужно хотя бы на секунду быстрее.`}
+              </p>
+              {history.length > 1 && <TimeStrip runs={history} />}
+            </>
+          )}
+          <div className="route-actions column">
+            <button type="button" className="route-btn go" onClick={() => setView({ name: "timed" })}>
+              Ещё раз
             </button>
             <button type="button" className="route-btn soft" onClick={back}>
               На карту
@@ -219,6 +339,7 @@ export function RouteSection({
       <main className="route">
         {header("Слов в минуту", "МОИ УСПЕХИ")}
         <Growth saved={saved} />
+        <Records saved={saved} targets={[storyTarget, tableTimedTarget(TABLE_SIZE)]} />
       </main>
     );
   }
@@ -372,6 +493,10 @@ export function RouteSection({
           <button type="button" onClick={() => setView({ name: "growth" })}>
             <TrendingUp aria-hidden="true" />
             Успехи
+          </button>
+          <button type="button" onClick={() => setView({ name: "timed" })}>
+            <TimerReset aria-hidden="true" />
+            На время
           </button>
           <button type="button" onClick={() => setView({ name: "minute-gate" })}>
             <Timer aria-hidden="true" />
@@ -557,5 +682,42 @@ function MapArt() {
         ул. Садовая
       </text>
     </svg>
+  );
+}
+
+/** Полоска последних заходов: столбик короче — прочитал быстрее. */
+function TimeStrip({ runs }: { runs: { date: string; seconds: number }[] }) {
+  const max = Math.max(...runs.map((run) => run.seconds));
+  return (
+    <div className="time-strip" role="img" aria-label={`Последние заходы: ${runs.map((r) => formatSeconds(r.seconds)).join(", ")}`}>
+      {runs.map((run, i) => (
+        <div key={i}>
+          <span style={{ height: `${Math.max(12, (run.seconds / max) * 100)}%` }} className={i === runs.length - 1 ? "last" : ""} />
+          <b>{Math.round(run.seconds)}</b>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Records({ saved, targets }: { saved: Saved; targets: TimedTarget[] }) {
+  return (
+    <section className="records">
+      <h2>Рекорды на время</h2>
+      {targets.map((target) => {
+        const best = saved.timedBest[target.key];
+        return (
+          <div key={target.key} className="record-row">
+            <span>{target.title}</span>
+            <b>{best === undefined ? "ещё нет" : formatSeconds(best)}</b>
+          </div>
+        );
+      })}
+      <p className="route-note">
+        За чтение на время — {withCount(TIMED_STARS, STARS_NOUN)} в день за каждый текст, за побитый
+        рекорд ещё {TIMED_RECORD_STARS}. В сквере новый рассказ появляется на каждом круге маршрута
+        (всего рассказов: {STORIES.length}).
+      </p>
+    </section>
   );
 }

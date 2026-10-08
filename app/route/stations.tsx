@@ -14,7 +14,7 @@ import {
   WORDS_PER_SESSION,
   type Story,
 } from "@/content/route";
-import { pickForDay, splitSyllables } from "@/lib/route";
+import { formatSeconds, pickForDay, splitSyllables } from "@/lib/route";
 import { speakText } from "@/lib/speech";
 
 /**
@@ -114,7 +114,13 @@ export function CoupleStation({ onDone }: DoneProps) {
 }
 
 /** Школа: слоговая таблица, подсвеченный слог читается вслух. */
-export function TableStation({ onDone, seed }: DoneProps) {
+export function TableStation({
+  onDone,
+  seed,
+}: {
+  onDone: (seconds: number) => void;
+  seed: string;
+}) {
   const cells = useMemo(() => pickForDay(TABLE_SYLLABLES, TABLE_SIZE, seed), [seed]);
   const [index, setIndex] = useState(0);
   const [started, setStarted] = useState<number | null>(null);
@@ -125,9 +131,10 @@ export function TableStation({ onDone, seed }: DoneProps) {
     const start = started ?? now;
     if (started === null) setStarted(now);
     if (index >= cells.length - 1) {
-      setSeconds(Math.max(1, Math.round((now - start) / 1000)));
+      const elapsed = (now - start) / 1000;
+      setSeconds(Math.max(1, Math.round(elapsed)));
       setIndex(cells.length);
-      onDone();
+      onDone(elapsed);
       return;
     }
     setIndex(index + 1);
@@ -468,6 +475,109 @@ export function MinuteCheck({
           Сохранить результат
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Слоги рассказа по цветам — общий вид для сквера и секундомера. */
+export function SyllableText({ text }: { text: string }) {
+  const words = useMemo(() => splitSyllables(text), [text]);
+  let counter = 0;
+  return (
+    <div className="story-card">
+      {words.map((word, w) => (
+        <span key={w} className="story-word">
+          {word.map((part, p) => (
+            <span key={p} className={counter++ % 2 ? "syl-b" : "syl-a"}>
+              {part}
+            </span>
+          ))}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Секундомер «Читаю на время». Текст спрятан до старта: так время честное,
+ * и ребёнок не начинает читать «про себя» заранее. Время идёт по реальным
+ * часам (Date.now), а не по счётчику тиков — вкладка в фоне не замедлит его.
+ */
+export function Stopwatch({
+  best,
+  onFinish,
+  children,
+}: {
+  best: number | null;
+  onFinish: (seconds: number) => void;
+  children: React.ReactNode;
+}) {
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    if (startedAt === null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(id);
+  }, [startedAt]);
+
+  const elapsed = startedAt === null ? 0 : Math.max(0, (now - startedAt) / 1000);
+  const ahead = best !== null && startedAt !== null && elapsed < best;
+
+  const start = () => {
+    const t = Date.now();
+    setNow(t);
+    setStartedAt(t);
+  };
+  const stop = () => {
+    if (startedAt === null) return;
+    onFinish((Date.now() - startedAt) / 1000);
+  };
+
+  return (
+    <div className="route-exercise">
+      <div className={`stopwatch ${startedAt !== null ? "running" : ""}`}>
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="stopwatch-icon">
+          <circle cx="12" cy="13.5" r="8" fill="none" stroke="currentColor" strokeWidth="2" />
+          <path d="M12 13.5V9.5M9.5 2.5h5M19 6l-1.5 1.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+        <div className="stopwatch-time" role="timer" aria-live="off">
+          {formatSeconds(elapsed)}
+        </div>
+        <div className="stopwatch-best">
+          {best === null ? (
+            "Первый заход — рекорда пока нет"
+          ) : (
+            <>
+              Рекорд: <b>{formatSeconds(best)}</b>
+              {startedAt !== null && (
+                <span className={ahead ? "ahead" : "behind"}>
+                  {ahead ? " — успеваешь!" : " — рекорд позади, дочитай до конца"}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+      {startedAt === null ? (
+        <>
+          <div className="stopwatch-hidden">Нажми «Старт» — и текст появится</div>
+          <div className="route-actions">
+            <button type="button" className="route-btn go" onClick={start}>
+              Старт
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {children}
+          <div className="route-actions">
+            <button type="button" className="route-btn stop" onClick={stop}>
+              Стоп — я дочитал!
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

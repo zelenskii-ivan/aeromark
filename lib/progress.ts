@@ -17,6 +17,12 @@ const readingCheckSchema = z.object({
   errors: z.number().int().min(0),
 });
 
+const timedRunSchema = z.object({
+  key: z.string(),
+  date: z.string(),
+  seconds: z.number().min(0),
+});
+
 const couponSchema = z.object({
   id: z.string(),
   prizeId: z.string(),
@@ -54,6 +60,11 @@ export const savedSchema = z.object({
   /** Потраченные на призы звёзды. Баланс = stars − spent. */
   spent: z.number().int().min(0).catch(0).default(0),
   coupons: z.array(couponSchema).catch([]).default([]),
+  /** Чтение на время: текст → лучшее время в секундах. */
+  timedBest: z.record(z.string(), z.number().min(0)).catch({}).default({}),
+  /** Текст → дата, когда за него последний раз дали звёзды. */
+  timedRewarded: z.record(z.string(), z.string()).catch({}).default({}),
+  timedRuns: z.array(timedRunSchema).catch([]).default([]),
 });
 
 export type Saved = z.infer<typeof savedSchema>;
