@@ -1,10 +1,13 @@
 # Записи Академии пилотов
 
-Записи синтезированы голосом **Dasha (RHVoice)** — проект RHVoice,
-https://github.com/RHVoice/RHVoice.
+Записи сделаны системным голосом macOS «Milena» (Apple) скриптом
+`aeromark-voice.sh` (см. `docs/READING_ACADEMY.md`) и обработаны
+`scripts/academy-audio/import.py`.
 
-Голос распространяется по лицензии Creative Commons Attribution-ShareAlike 4.0
-International (https://creativecommons.org/licenses/by-sa/4.0/). Эти записи —
-производная работа и распространяются на тех же условиях.
+Голос — часть macOS; записи используются только в семейном учебном
+приложении Аэромарк. Перед публичным или коммерческим распространением
+приложения проверьте условия лицензии macOS на синтезированную речь или
+перезапишите фразы другим голосом (скрипты это позволяют).
 
-Сгенерированы скриптом `scripts/academy-audio/generate.py`.
+Запасной вариант — голос RHVoice «Dasha» (CC BY-SA 4.0),
+`scripts/academy-audio/generate.py`.
