@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { roadsSchema, initialRoads } from "./roads/state.ts";
 import { readValue } from "./storage.ts";
 import { academySchema, initialAcademy } from "./academy/state.ts";
 import type { Skill, Task } from "../content/types.ts";
@@ -31,6 +32,7 @@ export const savedSchema = z.object({
   lastPlayed: z.string().catch("").default(""),
   streak: z.number().int().min(0).catch(0).default(0),
   /** Академия пилотов (lib/academy). Старое сохранение без неё дочитывается. */
+  roads: roadsSchema.catch(initialRoads).default(initialRoads),
   academy: academySchema.catch(initialAcademy).default(initialAcademy),
 });
 
