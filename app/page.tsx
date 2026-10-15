@@ -73,6 +73,8 @@ import { isSoundOn, playMiss, playWin, setSoundOn } from "@/lib/celebrate";
 import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
+import { Roads } from "@/app/roads/Roads";
+import { roadStars } from "@/lib/roads/state";
 import { Academy } from "@/app/academy/Academy";
 import { ParentAcademy } from "@/app/academy/ParentAcademy";
 import type { Academy as AcademyState } from "@/lib/academy/state";
@@ -104,7 +106,8 @@ type Mode =
   | "practice"
   | "lesson"
   | "game"
-  | "academy";
+  | "academy"
+  | "roads";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -500,6 +503,10 @@ export default function Home() {
     );
   }
 
+  if (mode === "roads") {
+    return <Roads key={sync.state.childId ?? "local"} state={saved.roads} update={fn => setSaved(current => ({ ...current, roads: fn(current.roads) }))} pilotName={pilotName} onExit={() => setMode("home")} />;
+  }
+
   if (mode === "academy") {
     return (
       <Academy
@@ -718,6 +725,10 @@ export default function Home() {
           </TabsList>
 
           <TabsContent value="missions" className="tab-content">
+            <article className="action-card academy-entry">
+              <div><span className="eyebrow">ПДД · 1 КЛАСС</span><h2>Безопасные дороги</h2><p>Подготовка к олимпиаде Учи.ру 2026: авторские тренировки, три уровня и повторение ошибок. Звёзд: {roadStars(saved.roads)} из 15.</p></div>
+              <Button size="lg" onClick={() => setMode("roads")}>Тренироваться по ПДД</Button>
+            </article>
             <article className="action-card academy-entry">
               <div>
                 <span className="eyebrow">ЧТЕНИЕ</span>
