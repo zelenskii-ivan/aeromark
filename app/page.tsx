@@ -95,7 +95,9 @@ const FlightGame = dynamic(() => import("@/app/game/FlightGame"), {
 });
 
 const NAME_KEY = "aeromark-child-name";
-const DEFAULT_NAME = "Марк";
+// Нейтральное имя: сайт публичный, имя ребёнка задаётся во вкладке «Для взрослого»
+// или приходит из семейного профиля.
+const DEFAULT_NAME = "Пилот";
 const PRACTICE_LENGTH = 8;
 
 type Mode =

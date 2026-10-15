@@ -45,3 +45,11 @@ jobs:
       # уже во время деплоя.
       - run: docker build -t aeromark-web .
       - run: docker build -t aeromark-api ./server
+
+  ops:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # shellcheck предустановлен в образе ubuntu-latest.
+      - run: shellcheck -x prod/*.sh
+      - run: docker compose -f prod/compose.yml --env-file prod/staging.env.example config --quiet
