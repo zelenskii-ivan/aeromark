@@ -8,7 +8,7 @@ import {
   SUBJECTS,
   stepSkill,
 } from "../content/lesson.ts";
-import { lessons, lessonById, lessonsBySubject } from "../content/lessons/index.ts";
+import { allLessons as lessons, lessonById, lessonsBySubject } from "../content/lessons/index.ts";
 import { isCorrect, SKILLS } from "../content/types.ts";
 import { speechForTask, splitByScript } from "../lib/speech.ts";
 

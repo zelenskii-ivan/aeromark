@@ -75,6 +75,9 @@ import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
 import { Roads } from "@/app/roads/Roads";
 import { roadStars } from "@/lib/roads/state";
+import { MathYear } from "@/app/math-year/MathYear";
+import { mathYearLessons, type Quarter } from "@/content/math-year/plan";
+import { quarterJustCompleted } from "@/lib/math-year";
 import { Academy } from "@/app/academy/Academy";
 import { ParentAcademy } from "@/app/academy/ParentAcademy";
 import type { Academy as AcademyState } from "@/lib/academy/state";
@@ -109,7 +112,8 @@ type Mode =
   | "lesson"
   | "game"
   | "academy"
-  | "roads";
+  | "roads"
+  | "mathYear";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -153,6 +157,9 @@ export default function Home() {
   const [burst, setBurst] = useState(0);
   const [sound, setSound] = useState(true);
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  // Куда вернуться из урока: уроки «Математики на год» открываются с её карты.
+  const [lessonOrigin, setLessonOrigin] = useState<"home" | "mathYear">("home");
+  const [celebrateQuarter, setCelebrateQuarter] = useState<Quarter | null>(null);
 
   useEffect(() => {
     // Страница пререндерится статически, поэтому прогресс нельзя прочитать в
@@ -260,6 +267,7 @@ export default function Home() {
       return;
     }
     if (nextLesson) {
+      setLessonOrigin("home");
       setLesson(nextLesson);
       setMode("lesson");
       return;
@@ -369,6 +377,10 @@ export default function Home() {
   };
 
   const finishLesson = () => {
+    if (lesson && !saved.completedLessons.includes(lesson.id)) {
+      const after = [...saved.completedLessons, lesson.id];
+      setCelebrateQuarter(quarterJustCompleted(saved.completedLessons, after));
+    }
     setSaved((current) =>
       lesson && !current.completedLessons.includes(lesson.id)
         ? {
@@ -379,7 +391,7 @@ export default function Home() {
         : current,
     );
     setLesson(null);
-    setMode("home");
+    setMode(lessonOrigin);
   };
 
   const completeGame = () => {
@@ -500,9 +512,32 @@ export default function Home() {
         onAnswer={answerLessonStep}
         onExit={() => {
           setLesson(null);
-          setMode("home");
+          setMode(lessonOrigin);
         }}
         onFinish={finishLesson}
+      />
+    );
+  }
+
+  if (mode === "mathYear") {
+    return (
+      <MathYear
+        completed={saved.completedLessons}
+        stars={saved.stars}
+        pilotName={pilotName}
+        soundOn={sound}
+        celebrate={celebrateQuarter}
+        onCelebrated={() => setCelebrateQuarter(null)}
+        onStart={(item) => {
+          setLessonOrigin("mathYear");
+          setLesson(item);
+          setMode("lesson");
+        }}
+        onExit={() => {
+          setLessonOrigin("home");
+          setCelebrateQuarter(null);
+          setMode("home");
+        }}
       />
     );
   }
@@ -730,6 +765,23 @@ export default function Home() {
 
           <TabsContent value="missions" className="tab-content">
             <article className="action-card academy-entry">
+              <div>
+                <span className="eyebrow">МАТЕМАТИКА · ВЕСЬ 1 КЛАСС</span>
+                <h2>Полёт через весь год</h2>
+                <p>
+                  Четыре четверти по программе «Перспектива»: состав чисел,
+                  сравнение, сложение. За каждую четверть — новый самолёт в
+                  ангаре. Пройдено уроков:{" "}
+                  {mathYearLessons.filter((item) => saved.completedLessons.includes(item.id)).length}{" "}
+                  из {mathYearLessons.length}.
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("mathYear")}>
+                <Plane />
+                К карте года
+              </Button>
+            </article>
+            <article className="action-card academy-entry">
               <div><span className="eyebrow">ПДД · 1 КЛАСС</span><h2>Безопасные дороги</h2><p>Подготовка к олимпиаде Учи.ру 2026: авторские тренировки, три уровня и повторение ошибок. Звёзд: {roadStars(saved.roads)} из 15.</p></div>
               <Button size="lg" onClick={() => setMode("roads")}>Тренироваться по ПДД</Button>
             </article>
@@ -864,6 +916,7 @@ export default function Home() {
                     type="button"
                     className={`lesson-card ${done ? "done" : ""}`}
                     onClick={() => {
+                      setLessonOrigin("home");
                       setLesson(item);
                       setMode("lesson");
                     }}

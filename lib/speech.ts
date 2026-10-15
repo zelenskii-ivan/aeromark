@@ -63,6 +63,8 @@ export function prepareSpeech(text: string): string {
   result = result
     .replace(/(\d+)\s*\+\s*(\d+)/g, "$1 плюс $2")
     .replace(/(\d+)\s*[−–—-]\s*(\d+)/g, "$1 минус $2")
+    .replace(/(\d+)\s*>\s*(\d+)/g, "$1 больше $2")
+    .replace(/(\d+)\s*<\s*(\d+)/g, "$1 меньше $2")
     .replace(/=/g, " равно ")
     .replace(/\bсм\b/g, "сантиметров")
     .replace(/\[([^\]]+)\]/g, "звук $1")

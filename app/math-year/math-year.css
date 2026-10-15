@@ -1,0 +1,126 @@
+/* «Математика на год»: карта четвертей. Палитра — из globals.css. */
+.math-year {
+  position: relative;
+  max-width: 960px;
+  min-height: 100vh;
+  margin: auto;
+  padding: 20px 18px 56px;
+  color: var(--foreground);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  isolation: isolate;
+}
+.math-year h1 { font-size: clamp(28px, 5vw, 42px); font-weight: 900; line-height: 1.15; margin: 6px 0 8px; }
+.math-year h2 { font-size: 22px; font-weight: 800; line-height: 1.3; margin: 4px 0; }
+.math-year p { line-height: 1.6; margin: 6px 0; }
+.math-year button:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.my-eyebrow { font-size: 12px; letter-spacing: 0.06em; font-weight: 900; color: var(--primary); }
+.my-muted { color: var(--muted-foreground); font-size: 15px; }
+.my-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.my-stars { display: inline-flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 800; }
+.my-intro [role="progressbar"] { margin: 12px 0 4px; }
+.my-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 22px;
+  box-shadow: 0 6px 20px #0d4d6e0d;
+}
+.my-next { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-color: #9fd3ef; }
+
+/* Небо: медленно плывущие облака за контентом. */
+.my-sky { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: linear-gradient(#cdeaff, #eaf8ff 420px); }
+.my-cloud {
+  position: absolute;
+  width: 180px;
+  height: 56px;
+  border-radius: 999px;
+  background: #ffffffd9;
+  box-shadow: 40px -18px 0 4px #ffffffd9, 90px 0 0 -6px #ffffffd9;
+  animation: my-drift linear infinite;
+}
+.my-cloud.c1 { top: 60px; left: -220px; animation-duration: 70s; }
+.my-cloud.c2 { top: 260px; left: -220px; animation-duration: 95s; animation-delay: -40s; transform: scale(0.7); }
+.my-cloud.c3 { top: 520px; left: -220px; animation-duration: 120s; animation-delay: -80s; transform: scale(0.85); }
+@keyframes my-drift { to { translate: calc(100vw + 440px) 0; } }
+
+/* Ангар. */
+.my-hangar-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.my-hangar-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 8px; border-radius: 18px; background: var(--muted);
+  text-align: center; font-size: 14px; font-weight: 700; color: var(--muted-foreground);
+}
+.my-hangar-slot.earned { background: #fff6d6; color: #5a4100; }
+
+/* Значок самолёта четверти. Закрытый — серый замок. */
+.my-badge {
+  display: inline-grid; place-items: center; flex: none;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: #e4ecf1; color: #8aa0b2;
+}
+.my-badge.earned {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #fff1c2);
+  color: var(--plane);
+  box-shadow: 0 0 0 3px #ffd766, 0 6px 16px #c7900033;
+}
+.my-celebration .my-badge { width: 112px; height: 112px; }
+
+/* Маршрут: пунктир между аэропортами. */
+.my-route { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 28px; }
+.my-airport { position: relative; background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 20px; }
+.my-airport + .my-airport::before {
+  content: ""; position: absolute; left: 51px; top: -30px; height: 30px;
+  border-left: 4px dashed #8cc6e7;
+}
+.my-airport.complete { border-color: #f0c64a; background: linear-gradient(#fffdf4, #ffffff 120px); }
+.my-airport-head { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+
+.my-topics { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.my-topic {
+  width: 100%; min-height: 60px; display: grid; grid-template-columns: 32px 1fr; grid-template-rows: auto auto;
+  column-gap: 10px; align-items: center; text-align: left;
+  padding: 10px 14px; border-radius: 16px; border: 2px solid var(--border); background: #f8fcff;
+  color: var(--foreground); cursor: pointer; font: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.my-topic:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 14px #0d4d6e1a; }
+.my-topic-mark {
+  grid-row: span 2; width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center; background: #e5f1f8; color: var(--primary);
+}
+.my-topic-title { font-weight: 700; line-height: 1.3; }
+.my-topic-state { font-size: 13px; color: var(--muted-foreground); }
+.my-topic.done { background: #f1faf3; border-color: #a7dcb6; }
+.my-topic.done .my-topic-mark { background: #2e8b57; color: #fff; }
+.my-topic.next { border-color: var(--primary); background: #e2f2ff; box-shadow: inset 5px 0 var(--primary); }
+.my-topic.next .my-topic-mark { background: var(--primary); color: #fff; animation: my-bob 1.6s ease-in-out infinite; }
+.my-topic.soon { cursor: default; border-style: dashed; background: transparent; color: var(--muted-foreground); }
+@keyframes my-bob { 50% { translate: 0 -3px; } }
+
+/* Праздник за четверть. */
+.my-celebration {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  padding: 16px; background: #0b2a4499; backdrop-filter: blur(2px);
+}
+.my-celebration-card {
+  position: relative; overflow: hidden; width: min(440px, 100%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  background: var(--card); border-radius: 28px; padding: 32px 24px 24px;
+  box-shadow: 0 20px 60px #0b2a4466;
+  animation: my-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+}
+@keyframes my-pop { from { transform: scale(0.85); opacity: 0; } }
+
+@media (max-width: 700px) {
+  .my-next { flex-direction: column; align-items: stretch; }
+  .my-topics { grid-template-columns: 1fr; }
+  .my-hangar-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .my-card, .my-airport { padding: 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cloud { display: none; }
+  .my-topic.next .my-topic-mark, .my-celebration-card { animation: none; }
+  .my-topic { transition: none; }
+}
