@@ -470,7 +470,9 @@ export default function Home() {
     sync.state.resetToken ||
     sync.state.phase === "unknown" ||
     sync.state.phase === "anonymous" ||
-    (sync.state.phase === "offline" && !sync.state.childId) ||
+    // Без сервера экран входа — тупик: войти нельзя, а кнопок «дальше» нет.
+    // Поэтому в offline приложение открывается локально (как PWA), а
+    // состояние сервера и перенос прогресса файлом — во вкладке «Для взрослого».
     (sync.state.phase === "signed-in" && !sync.state.childId)
   ) {
     return (
