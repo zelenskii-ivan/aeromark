@@ -1,0 +1,6 @@
+# Ежедневная резервная копия базы Аэромарка (prod) в 03:17 по времени сервера.
+# Установка: sudo cp /opt/aeromark/src/prod/cron.d/aeromark-backup /etc/cron.d/
+# Журнал: /var/log/aeromark-backup.log
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+17 3 * * * root /opt/aeromark/src/prod/backup.sh prod >> /var/log/aeromark-backup.log 2>&1

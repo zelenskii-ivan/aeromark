@@ -1,3 +1,8 @@
+# Один файл на оба окружения. Окружение задаёт имя проекта (-p) и env-файл:
+#   prod    — -p prod,    /opt/aeromark/.env          (порты 3000/4000)
+#   staging — -p staging, /opt/aeromark/staging.env   (WEB_PORT/API_PORT, например 3100/4100)
+# Том базы называется <проект>_postgres_data, поэтому staging никогда не
+# касается prod_postgres_data. Запускать через prod/deploy.sh.
 services:
   postgres:
     image: postgres:17-alpine
@@ -17,7 +22,9 @@ services:
       retries: 5
 
   api:
-    image: aeromark-api:review-bebe8d3
+    # Тег задаёт prod/deploy.sh через release.env; значение по умолчанию —
+    # образ, который работал до появления скрипта.
+    image: aeromark-api:${API_TAG:-review-bebe8d3}
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -34,10 +41,10 @@ services:
     networks:
       - internal
     ports:
-      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:${API_PORT:-4000}:4000"
 
   web:
-    image: aeromark-web:review-next1634
+    image: aeromark-web:${WEB_TAG:-review-next1634}
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
@@ -48,7 +55,7 @@ services:
     networks:
       - internal
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
 
 volumes:
   postgres_data:
