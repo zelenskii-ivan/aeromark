@@ -22,34 +22,79 @@ export function partModel(p: Part) {
   } else box(group, p.size, [0, 0, 0], p.color);
   return group;
 }
-// Articulated procedural placeholder, not a skinned GLB or an approved likeness.
-// Limb pivots support idle, walk, carry and seated poses without external assets.
+// Procedural interpretation of the supplied character sheet (everyday outfit).
+// Articulated meshes, not a skinned GLB; facial likeness remains approximate.
 export function markModel() {
   const root = new T.Group();
-  ball(root, [.35, .44, .26], [0, 1.15, 0], 0x258fbb);
-  ball(root, [.37, .42, .34], [0, 1.88, 0], 0xf3c29b);
-  ball(root, [.38, .21, .35], [0, 2.14, .01], 0x725039);
-  for (const x of [-.13, .13]) {
-    ball(root, [.065, .08, .04], [x, 1.94, -.31], 0xffffff);
-    ball(root, [.032, .045, .025], [x, 1.93, -.35], 0x344d53);
+  const skin = 0xf0bd95, hair = 0xb1844f, shirt = 0xf8f5ef, navy = 0x223248;
+  ball(root, [.32, .42, .23], [0, 1.18, 0], shirt);
+  // Straight polo hem, short zip and two separate collar leaves.
+  ball(root, [.29, .1, .2], [0, .94, 0], shirt);
+  ball(root, [.12, .14, .12], [0, 1.62, 0], skin);
+  for (const side of [-1, 1]) {
+    const collar = box(root, [.17, .16, .055], [side * .105, 1.53, -.195], 0xffffff);
+    collar.rotation.z = side * -.4;
   }
-  ball(root, [.07, .06, .06], [0, 1.79, -.34], 0xe7a17d);
+  box(root, [.025, .25, .025], [0, 1.4, -.235], 0xc9bba7);
+  box(root, [.04, .055, .03], [0, 1.49, -.255], 0xd9c7a9);
+  const head = new T.Group(); head.position.y = 1.94; root.add(head);
+  ball(head, [.345, .405, .32], [0, 0, 0], skin);
+  ball(head, [.245, .19, .25], [0, -.23, -.055], skin);
+  for (const side of [-1, 1]) {
+    ball(head, [.07, .105, .06], [side * .345, -.025, .005], skin);
+    ball(head, [.033, .06, .018], [side * .365, -.02, -.045], 0xd6947d);
+    ball(head, [.07, .035, .008], [side * .19, -.13, -.275], 0xeab095);
+    ball(head, [.082, .062, .033], [side * .13, .025, -.292], 0xfffbf6);
+    ball(head, [.041, .046, .018], [side * .13, .025, -.324], 0x688c9f);
+    ball(head, [.021, .03, .012], [side * .13, .025, -.341], 0x273b4a);
+    ball(head, [.009, .012, .006], [side * .13 - .009, .04, -.352], 0xffffff);
+    const brow = ball(head, [.086, .018, .02], [side * .13, .115, -.294], 0x956b42);
+    brow.rotation.z = side * -.1;
+  }
+  ball(head, [.055, .065, .055], [0, -.07, -.315], 0xefb28b);
+  // Small open smile and visible upper teeth, as in the reference.
+  ball(head, [.1, .035, .012], [0, -.205, -.289], 0x935449);
+  ball(head, [.075, .014, .006], [0, -.19, -.302], 0xfff9e8);
+  // Layered blond locks replace the previous smooth brown cap.
+  ball(head, [.352, .21, .325], [0, .255, .035], hair);
+  ball(head, [.33, .27, .18], [0, .16, .17], hair);
+  for (let i = 0; i < 13; i++) {
+    const angle = i * 2.399;
+    const lock = ball(head, [.045, .12, .06], [Math.sin(angle) * .27, .26 + (i % 3) * .025, Math.cos(angle) * .23], i % 3 ? 0xbe925b : 0xd4ad76);
+    lock.rotation.z = Math.sin(angle) * -.55;
+    lock.rotation.x = Math.cos(angle) * .4;
+  }
+  for (let i = 0; i < 5; i++) {
+    const fringe = ball(head, [.045, .13, .035], [-.24 + i * .11, .205 + (i % 2) * .025, -.257], i % 2 ? 0xcba06a : 0xb98a52);
+    fringe.rotation.z = -.35 + i * .14;
+  }
   const limbs = [-1, 1].map(side => {
-    const arm = new T.Group(); arm.position.set(side * .4, 1.4, 0); root.add(arm);
-    ball(arm, [.13, .29, .13], [0, -.2, 0], 0x258fbb);
-    ball(arm, [.12, .14, .12], [0, -.49, 0], 0xf3c29b);
-    const leg = new T.Group(); leg.position.set(side * .18, .85, 0); root.add(leg);
-    box(leg, [.26, .65, .28], [0, -.3, 0], 0x25455c);
-    box(leg, [.3, .18, .44], [0, -.72, -.06], 0xfff6e3);
+    const arm = new T.Group(); arm.position.set(side * .35, 1.46, 0); root.add(arm);
+    ball(arm, [.135, .19, .14], [side * .025, -.1, 0], shirt);
+    ball(arm, [.085, .19, .09], [side * .045, -.34, 0], skin);
+    ball(arm, [.085, .105, .055], [side * .045, -.54, 0], skin);
+    ball(arm, [.035, .065, .035], [side * -.025, -.51, -.025], skin);
+    const leg = new T.Group(); leg.position.set(side * .155, .9, 0); root.add(leg);
+    ball(leg, [.145, .35, .16], [0, -.28, 0], navy);
+    box(leg, [.245, .13, .27], [0, -.58, 0], navy);
+    // Navy cargo pocket, ochre upper, contrasting toe and pale sole.
+    box(leg, [.035, .17, .17], [side * .14, -.17, .015], 0x2c3e54);
+    ball(leg, [.16, .125, .235], [0, -.735, -.065], 0xc58b3d);
+    box(leg, [.31, .065, .43], [0, -.835, -.065], 0xeae5d8);
+    ball(leg, [.155, .065, .075], [0, -.76, -.24], 0x9a9386);
+    for (let i = 0; i < 3; i++) box(leg, [.17, .014, .02], [0, -.63 - i * .017, -.09 - i * .035], 0xf1d19a);
     return { arm, leg };
   });
-  const hands = new T.Group(); hands.position.set(0, 1.15, -.85); root.add(hands);
+  const hands = new T.Group(); hands.position.set(0, 1.15, -.65); root.add(hands);
   return { root, hands, pose(time: number, moving: boolean, carrying: boolean, seated = false) {
     limbs.forEach(({ arm, leg }, i) => {
       const swing = moving ? Math.sin(time * 10 + i * Math.PI) * .65 : 0;
-      leg.rotation.x = seated ? -1.3 : swing;
-      arm.rotation.x = carrying || seated ? -1.25 : -swing * .7;
+      leg.rotation.x = seated ? 1.3 : swing;
+      // Positive X rotates a downward arm toward the character's -Z front.
+      arm.rotation.x = carrying || seated ? 1.25 : -swing * .7;
+      arm.rotation.z = carrying ? (i === 0 ? -.2 : .2) : 0;
     });
+    head.rotation.y = !moving && !carrying && !seated ? Math.sin(time * .8) * .035 : 0;
   } };
 }
 export function airfield(scene: T.Scene) {
