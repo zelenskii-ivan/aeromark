@@ -74,6 +74,7 @@ import { Cheer } from "@/app/cheer";
 import { useSync } from "@/lib/sync";
 import { SyncPanel } from "@/app/sync-panel";
 import { Roads } from "@/app/roads/Roads";
+import { assemblyStars } from "@/lib/play-mark/state";
 import { roadStars } from "@/lib/roads/state";
 import { MathYear } from "@/app/math-year/MathYear";
 import { mathYearLessons, type Quarter } from "@/content/math-year/plan";
@@ -87,6 +88,8 @@ import {
   removeValue,
   writeValue,
 } from "@/lib/storage";
+
+const PlayMark = dynamic(() => import("@/app/play-mark/PlayMark"), { ssr: false });
 
 const FlightGame = dynamic(() => import("@/app/game/FlightGame"), {
   ssr: false,
@@ -111,6 +114,7 @@ type Mode =
   | "practice"
   | "lesson"
   | "game"
+  | "playMark"
   | "academy"
   | "roads"
   | "mathYear";
@@ -559,6 +563,14 @@ export default function Home() {
     );
   }
 
+  if (mode === "playMark") {
+    return <PlayMark key={sync.state.childId ?? "local"} state={saved.assembly} update={fn => setSaved(current => {
+      const assembly = fn(current.assembly);
+      const reward = assemblyStars(assembly) - assemblyStars(current.assembly);
+      return { ...current, assembly, stars: current.stars + Math.max(0, reward) };
+    })} onExit={() => setMode("home")} />;
+  }
+
   if (mode === "game") {
     return (
       <FlightGame onExit={() => setMode("home")} onComplete={completeGame} />
@@ -857,6 +869,14 @@ export default function Home() {
                 </div>
               </article>
             )}
+
+            <article className="action-card game-card">
+              <div><span className="eyebrow">НОВОЕ ПРИКЛЮЧЕНИЕ · 3D</span>
+                <h3>Поиграй с Марком</h3>
+                <p>Собери свой самолёт и взлетай! {saved.assembly.installed.length} из 20 деталей · {assemblyStars(saved.assembly)} / 30 звёзд</p>
+              </div>
+              <Button size="lg" onClick={() => setMode("playMark")}><Gamepad2 />На аэродром</Button>
+            </article>
 
             <div className="action-grid">
               <article

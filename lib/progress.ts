@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assemblySchema, initialAssembly } from "./play-mark/state.ts";
 import { roadsSchema, initialRoads } from "./roads/state.ts";
 import { readValue } from "./storage.ts";
 import { academySchema, initialAcademy } from "./academy/state.ts";
@@ -33,6 +34,7 @@ export const savedSchema = z.object({
   streak: z.number().int().min(0).catch(0).default(0),
   /** Академия пилотов (lib/academy). Старое сохранение без неё дочитывается. */
   roads: roadsSchema.catch(initialRoads).default(initialRoads),
+  assembly: assemblySchema.catch(initialAssembly).default(initialAssembly),
   academy: academySchema.catch(initialAcademy).default(initialAcademy),
 });
 
