@@ -50,6 +50,9 @@ type Phase = "intro" | "loading" | "play" | "done";
 
 const MARK_URL = "/models/mark.glb";
 const PLANE_URL = "/models/su57.glb";
+const DAD_URL = "/models/dad.glb";
+/** Где стоит Капитан Папа: слева от самолёта, Марк ждёт справа. */
+const DAD_HOME = new THREE.Vector3(-3.05, 0, -0.85);
 /** Где Марк ждёт своей очереди в начале. */
 const MARK_HOME = new THREE.Vector3(2.3, 0, 1.2);
 const SHELF_Z = 1.95;
@@ -84,6 +87,9 @@ type Piece = {
 };
 
 type Tween = { t: number; dur: number; step: (k: number) => void; done: () => void };
+
+/** Сколько примерно звучит фраза синтезатором — чтобы реплики не перебивали друг друга. */
+const speechTime = (text: string) => 0.8 + text.length * 0.068;
 
 const ease = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
 
@@ -403,6 +409,73 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     };
 
     const loader = new GLTFLoader();
+    // ---------- Капитан Папа ----------
+    type Dad = {
+      root: THREE.Object3D;
+      mixer: THREE.AnimationMixer;
+      actions: Record<string, THREE.AnimationAction>;
+      current: THREE.AnimationAction | null;
+    };
+    let dad: Dad | null = null;
+    let dadBusy = false;
+    const dadPos = DAD_HOME.clone();
+    const playDad = (name: string, once = false, fade = 0.3) => {
+      if (!dad) return 0;
+      const action = dad.actions[name];
+      if (!action) return 0;
+      action.reset();
+      action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = once;
+      action.enabled = true;
+      action.setEffectiveWeight(1);
+      if (dad.current && dad.current !== action) action.crossFadeFrom(dad.current, fade, false);
+      action.play();
+      dad.current = action;
+      return action.getClip().duration;
+    };
+    /** Папа радуется каждой поставленной детали, если сейчас ничем не занят. */
+    const dadCheer = async () => {
+      if (!dad || dadBusy) return;
+      dadBusy = true;
+      const d = playDad("Cheer", true, 0.2);
+      await wait(d);
+      playDad("Idle", false, 0.4);
+      dadBusy = false;
+    };
+    const dadReady = new Promise<void>((resolve) => {
+      const timer = window.setTimeout(resolve, 15000);
+      new GLTFLoader().load(
+        DAD_URL,
+        (gltf) => {
+          window.clearTimeout(timer);
+          if (disposed) return resolve();
+          const root = gltf.scene;
+          root.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh) {
+              o.castShadow = true;
+              o.receiveShadow = true;
+              o.frustumCulled = false;
+            }
+          });
+          scene.add(root);
+          const mixer = new THREE.AnimationMixer(root);
+          const actions: Record<string, THREE.AnimationAction> = {};
+          for (const clip of gltf.animations) actions[clip.name] = mixer.clipAction(clip);
+          dad = { root, mixer, actions, current: null };
+          root.position.copy(dadPos);
+          // Лицом между самолётом и камерой.
+          root.rotation.y = Math.atan2(0.3 - dadPos.x, 3 - dadPos.z);
+          playDad("Idle");
+          resolve();
+        },
+        undefined,
+        () => {
+          window.clearTimeout(timer);
+          resolve();
+        },
+      );
+    });
+
     const markReady = new Promise<void>((resolve) => {
       const timer = window.setTimeout(resolve, 15000);
       loader.load(
@@ -469,6 +542,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       });
     };
     const settle = (id: PieceId) => {
+      if (state.placed.length < PIECE_COUNT) void dadCheer();
       const ghost = ghosts.get(id);
       if (ghost) ghost.visible = false;
       setPlaced(state.placed.length);
@@ -545,7 +619,8 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         const d = play("Victory", true, 0.2);
         await wait(d);
         // Отводим Марка с пути самолёта: тот поедет к воротам, то есть к −Z.
-        if (Math.abs(markPos.x) < 1.9) {
+        // Вправо: слева стоит Капитан Папа и оттуда взлетит.
+        if (Math.abs(markPos.x) < 1.9 || markPos.x < 0) {
           await walkPath([new THREE.Vector3(2.5, 0, markPos.z)], "Walk", WALK_SPEED);
         }
         play("Idle", false, 0.3);
@@ -559,21 +634,54 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       for (const piece of pieces.values()) planeGroup.attach(piece.pivot);
       if (realPlane) afterburners = buildAfterburners(0.46, -1.24);
       planeGroup.add(afterburners);
-      say("Су-57 готов к полёту. Взлетаем!");
       const start = planeGroup.position.clone();
+      // Капитан Папа взлетает и сопровождает самолёт слева.
+      const escort = new THREE.Vector3(-1.75, 1.15, 0.2);
+      if (dad) {
+        dadBusy = true;
+        const line = "Отличная работа, экипаж! Капитан Папа сопровождает Су-57!";
+        say(line);
+        const d = playDad("TakeOff", true, 0.2);
+        const from = dadPos.clone();
+        const fromYaw = dad.root.rotation.y;
+        await wait(d * 0.45);
+        await tween(d * 0.55, (k) => {
+          const e = ease(k);
+          dadPos.lerpVectors(from, escort.clone().add(new THREE.Vector3(0, 0, 0.4)), e);
+          dadPos.y = from.y + (escort.y - from.y) * e;
+          if (dad) dad.root.rotation.y = fromYaw + (Math.PI - fromYaw) * e;
+        });
+        playDad("Fly", false, 0.3);
+        await wait(Math.max(0.4, speechTime(line) - d));
+      }
+      say("Су-57 готов к полёту. Взлетаем!");
+      const follow = () => {
+        if (!dad) return;
+        dadPos.set(
+          planeGroup.position.x + escort.x,
+          planeGroup.position.y + escort.y + Math.sin(performance.now() / 300) * 0.04,
+          planeGroup.position.z + escort.z,
+        );
+      };
       if (!reducedMotion) {
         await tween(1.4, (k) => {
           planeGroup.rotation.y = (Math.PI / 2) * ease(k);
           planeGroup.position.z = start.z - 0.6 * ease(k);
           planeGroup.position.y = 0.05 * Math.sin(k * Math.PI);
+          if (dad) {
+            dadPos.z = escort.z + 0.4 - 1.0 * ease(k);
+            dadPos.y = escort.y;
+          }
         });
         await tween(2.6, (k) => {
           const a = k * k;
           planeGroup.position.z = start.z - 0.6 - a * 16;
           planeGroup.position.y = Math.max(0, (k - 0.35) / 0.65) ** 2 * 4.5;
           planeGroup.rotation.z = Math.min(1, k * 1.6) * 0.18;
+          follow();
         });
       }
+      if (dad) dad.root.visible = false;
       if (mark) play("Wave", false, 0.3);
       onWin();
       setPhase("done");
@@ -690,6 +798,18 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         drop: (id: PieceId) => choose({ slot: id }),
         state: () => state,
         busy: () => busy,
+        /** Ставит все детали, кроме одной, — чтобы быстро проверить финал. */
+        fill: () => {
+          for (const id of PIECES.map((p) => p.id).slice(0, -1)) {
+            if (state.placed.includes(id)) continue;
+            state = { ...state, placed: [...state.placed, id], turn: "player" };
+            const piece = pieces.get(id)!;
+            piece.pivot.position.copy(piece.slot);
+            piece.pivot.quaternion.identity();
+            piece.pivot.scale.setScalar(1);
+            settle(id);
+          }
+        },
       };
     }
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
@@ -698,15 +818,25 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     // ---------- старт и перезапуск ----------
     startRef.current = async () => {
       setPhase("loading");
-      await Promise.all([markReady, planeReady]);
+      await Promise.all([markReady, planeReady, dadReady]);
       if (disposed) return;
       setPhase("play");
       if (mark) {
         await faceTo(new THREE.Vector3(0.5, 0, 5), 0.2);
         const d = play("Wave", true, 0.2);
-        say("Привет! Я Марк. Давай вместе соберём самолёт Су-57. Ходим по очереди: деталь берёшь ты, потом я. Начинай!");
-        await wait(Math.max(d, 1.5));
+        const hello = "Привет! Я Марк. Давай вместе соберём самолёт Су-57. Ходим по очереди: деталь берёшь ты, потом я.";
+        say(hello);
+        await wait(Math.max(d, speechTime(hello)));
+        play("Idle", false, 0.4);
+        if (dad) {
+          const dw = playDad("Wave", true, 0.2);
+          const line = "А я Капитан Папа! Соберите самолёт, и я провожу вас в небо.";
+          say(line);
+          await wait(Math.max(dw, speechTime(line)));
+          playDad("Idle", false, 0.4);
+        }
         play("Point", true, 0.3);
+        say("Начинай!");
         await wait(1.2);
         play("Idle", false, 0.4);
       } else {
@@ -731,6 +861,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       framePoints.push(new THREE.Vector3(x * 1.45, 0, -1.25));
     }
     framePoints.push(new THREE.Vector3(RIGHT_LANE + 0.2, 1.3, FRONT_LANE));
+    framePoints.push(new THREE.Vector3(DAD_HOME.x - 0.3, 1.95, DAD_HOME.z)); // Капитан Папа
     const viewDir = new THREE.Vector3(0.02, 0.46, 0.88).normalize();
     // На вертикальном экране смотрим круче сверху: сцена широкая, а места по высоте много.
     const viewDirNarrow = new THREE.Vector3(0.02, 0.78, 0.63).normalize();
@@ -807,6 +938,10 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
           tweens.splice(i, 1);
           tw.done();
         }
+      }
+      if (dad) {
+        dad.root.position.copy(dadPos);
+        dad.mixer.update(dt);
       }
       if (mark) {
         stepWalker(dt);
