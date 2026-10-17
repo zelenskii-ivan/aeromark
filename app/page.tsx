@@ -801,6 +801,21 @@ export default function Home() {
           <TabsContent value="missions" className="tab-content">
             <article className="action-card academy-entry">
               <div>
+                <span className="eyebrow">🛩️ ИГРА · 3D-АНГАР</span>
+                <h2>Собери Су-57 вместе с Марком</h2>
+                <p>
+                  {su57Complete
+                    ? "Самолёт уже улетал. Можно собрать его снова."
+                    : "Вы с Марком по очереди ставите детали истребителя, а потом он взлетает. Награда: 3 звезды."}
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("su57")}>
+                <Gamepad2 />
+                {su57Complete ? "Собрать снова" : "Собирать самолёт"}
+              </Button>
+            </article>
+            <article className="action-card academy-entry">
+              <div>
                 <span className="eyebrow">МАТЕМАТИКА · ВЕСЬ 1 КЛАСС</span>
                 <h2>Полёт через весь год</h2>
                 <p>
@@ -1007,21 +1022,6 @@ export default function Home() {
               </Button>
             </article>
 
-            <article className="action-card game-card su57-card-home">
-              <div>
-                <span className="eyebrow">🛩️ ИГРОВОЙ ЭПИЗОД 02</span>
-                <h3>Собери Су-57 вместе с Марком</h3>
-                <p>
-                  {su57Complete
-                    ? "Самолёт уже улетал. Можно собрать его снова."
-                    : "3D-ангар: вы с Марком по очереди ставите детали самолёта. Награда: 3 звезды."}
-                </p>
-              </div>
-              <Button size="lg" onClick={() => setMode("su57")}>
-                <Gamepad2 />
-                {su57Complete ? "Собрать снова" : "Собирать"}
-              </Button>
-            </article>
 
             <div className="mission-grid">
               {missions.map((item) => {
