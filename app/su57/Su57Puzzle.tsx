@@ -54,8 +54,6 @@ const PLANE_URL = "/models/su57.glb";
 const MARK_HOME = new THREE.Vector3(2.3, 0, 1.2);
 const SHELF_Z = 1.95;
 const GHOST_COLOR = 0x3d8bff;
-/** Второй ряд полки на узком экране — на столько дальше первого. */
-const SECOND_ROW = 0.95;
 const GHOST_OPACITY = 0.34;
 const FRONT_LANE = 1.38;
 const BACK_LANE = -1.5;
@@ -128,7 +126,6 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     scene.fog = new THREE.Fog(0xcfe6ff, 16, 34);
 
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80);
-    const lookAt = new THREE.Vector3(0, 0.45, 0.25);
 
     scene.add(new THREE.HemisphereLight(0xfff4e2, 0x5a5040, 1.15));
     const key = new THREE.DirectionalLight(0xffe7c4, 2.4);
@@ -172,10 +169,12 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         const longest = Math.max(size.x, size.z, 0.01);
         const shelfScale = Math.min(SHELF_SCALE, 0.74 / longest);
         const carryScale = Math.min(CARRY_SCALE, 0.55 / longest);
-        // На узком экране полка в два ряда по четыре, иначе она не помещается.
+        // Полка всегда в один ряд: на узком экране поддоны стоят теснее,
+        // а камера сама отъезжает так, чтобы видно было всё.
         const narrow = mount.clientWidth / Math.max(mount.clientHeight, 1) < 1;
-        const x = narrow ? -1.2 + (index % 4) * 0.8 : -2.8 + index * 0.8;
-        const z = narrow && index >= 4 ? SHELF_Z + SECOND_ROW : SHELF_Z;
+        const spacing = narrow ? 0.66 : 0.8;
+        const x = (index - (PIECES.length - 1) / 2) * spacing;
+        const z = SHELF_Z;
         const shelf = new THREE.Vector3(x, 0.12 + (size.y * shelfScale) / 2 + 0.02, z);
         const shelfYaw = id.startsWith("fin") ? 0.5 : id.startsWith("wing") ? -0.2 : -0.6;
         pivot.position.copy(shelf);
@@ -185,7 +184,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         pieces.set(id, { id, pivot, slot: mesh.center.clone(), shelf, shelfYaw, shelfScale, carryScale, meshes });
 
         const pallet = new THREE.Mesh(
-          new THREE.BoxGeometry(0.7, 0.1, 0.6),
+          new THREE.BoxGeometry(spacing - 0.08, 0.1, 0.6),
           new THREE.MeshStandardMaterial({ color: 0xc89a5c, roughness: 0.85 }),
         );
         pallet.position.set(x, 0.05, z);
@@ -255,6 +254,20 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     };
     let mark: Mark | null = null;
     let carried: Piece | null = null;
+    /** Плавный перенос детали с поддона в руки: пока идёт, деталь «догоняет» ладони. */
+    let lifting: { piece: Piece; t: number; dur: number; pos: THREE.Vector3; quat: THREE.Quaternion; scale: number; done: () => void } | null = null;
+    const liftInto = (piece: Piece, dur: number) =>
+      new Promise<void>((resolve) => {
+        lifting = {
+          piece,
+          t: 0,
+          dur: Math.max(dur, 0.05),
+          pos: piece.pivot.position.clone(),
+          quat: piece.pivot.quaternion.clone(),
+          scale: piece.pivot.scale.x,
+          done: resolve,
+        };
+      });
     const markPos = MARK_HOME.clone();
     // На узком экране Марк ждёт ближе к центру, иначе его не видно.
     if (mount.clientWidth / Math.max(mount.clientHeight, 1) < 1) markPos.x = 1.55;
@@ -380,34 +393,10 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       }
     };
     /** Обход самолёта: по передней или задней дорожке, между ними — сбоку. */
-    const route = (to: THREE.Vector3, start: THREE.Vector3 = markPos): THREE.Vector3[] => {
+    const route = (to: THREE.Vector3): THREE.Vector3[] => {
       const front = (z: number) => z > 1.1;
       const back = (z: number) => z < -1.2;
-      const from = start;
-      // Между рядами полки заходим сбоку, а не сквозь первый ряд.
-      const between = (z: number) => z > SHELF_Z + 0.2;
-      if (between(to.z) || between(from.z)) {
-        const side = (to.x + from.x >= 0 ? 1 : -1) * 1.85;
-        const path = [
-          new THREE.Vector3(side, 0, from.z),
-          new THREE.Vector3(side, 0, to.z),
-          to,
-        ];
-        if (between(from.z) && !between(to.z)) {
-          return [new THREE.Vector3(side, 0, from.z), new THREE.Vector3(side, 0, FRONT_LANE), ...route(to, new THREE.Vector3(side, 0, FRONT_LANE))];
-        }
-        if (back(from.z)) {
-          const lane = from.x + to.x >= 0 ? RIGHT_LANE : LEFT_LANE;
-          return [
-            new THREE.Vector3(lane, 0, from.z),
-            new THREE.Vector3(lane, 0, FRONT_LANE),
-            new THREE.Vector3(side, 0, FRONT_LANE),
-            new THREE.Vector3(side, 0, to.z),
-            to,
-          ];
-        }
-        return path;
-      }
+      const from = markPos;
       if ((front(from.z) && front(to.z)) || (back(from.z) && back(to.z))) return [to];
       const lane = from.x + to.x >= 0 ? RIGHT_LANE : LEFT_LANE;
       return [new THREE.Vector3(lane, 0, from.z), new THREE.Vector3(lane, 0, to.z), to];
@@ -503,16 +492,16 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       say(MARK_SAYS[state.placed.length % MARK_SAYS.length] ?? "Теперь моя очередь!");
       await wait(0.4);
       if (mark) {
-        const backRow = piece.shelf.z > SHELF_Z + 0.1;
-        const pickSpot = new THREE.Vector3(piece.shelf.x, 0, backRow ? piece.shelf.z - 0.48 : FRONT_LANE + 0.08);
+        const pickSpot = new THREE.Vector3(piece.shelf.x, 0, FRONT_LANE + 0.08);
         await walkPath(route(pickSpot), "Walk", WALK_SPEED);
         play("Idle", false, 0.2);
         await faceDir(0, 1);
         const dur = play("PickUp", true, 0.2);
         say(`Я беру ${pieceSpoken(id)}.`);
-        await wait(dur * 0.5);
-        carried = piece;
-        await wait(dur * 0.5);
+        // Деталь переходит с поддона в ладони, пока Марк к ней наклонился.
+        await wait(dur * 0.3);
+        await liftInto(piece, dur * 0.22);
+        await wait(dur * 0.48);
         const placeSpot = new THREE.Vector3(
           THREE.MathUtils.clamp(piece.slot.x, LEFT_LANE + 0.3, RIGHT_LANE - 0.3),
           0,
@@ -728,18 +717,71 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     if (autoStart) void startRef.current();
 
     // ---------- цикл ----------
+    /**
+     * Камера подбирает кадр сама: в него должны попасть самолёт, вся полка и
+     * дорожки Марка, и ничего не должно уходить под шапку и окно подсказки.
+     */
+    const framePoints: THREE.Vector3[] = [];
+    for (const x of [-1, 1]) {
+      for (const y of [0, 0.35]) {
+        framePoints.push(new THREE.Vector3(x * 3.05, y, SHELF_Z + 0.32)); // передний край полки
+        framePoints.push(new THREE.Vector3(x * 3.05, y, SHELF_Z - 0.32));
+      }
+      framePoints.push(new THREE.Vector3(x * 1.5, 1.3, BACK_LANE - 0.2)); // голова Марка за самолётом
+      framePoints.push(new THREE.Vector3(x * 1.45, 0, -1.25));
+    }
+    framePoints.push(new THREE.Vector3(RIGHT_LANE + 0.2, 1.3, FRONT_LANE));
+    const viewDir = new THREE.Vector3(0.02, 0.46, 0.88).normalize();
+    // На вертикальном экране смотрим круче сверху: сцена широкая, а места по высоте много.
+    const viewDirNarrow = new THREE.Vector3(0.02, 0.78, 0.63).normalize();
+    const projected = new THREE.Vector3();
+    const fitCamera = (w: number, h: number) => {
+      const narrow = w / h < 1;
+      const xs = narrow ? 0.66 / 0.8 : 1;
+      const pts = framePoints.map((p) => new THREE.Vector3(p.x * (Math.abs(p.z - SHELF_Z) < 0.5 ? xs : 1), p.y, p.z));
+      const top = 1 - (2 * (narrow ? 120 : 84)) / h;
+      const bottom = -1 + (2 * (narrow ? 150 : 128)) / h;
+      const side = 0.96;
+      const target = new THREE.Vector3(0, 0.35, 0.3);
+      const measure = (d: number) => {
+        camera.position.copy(target).addScaledVector(narrow ? viewDirNarrow : viewDir, d);
+        camera.lookAt(target);
+        camera.updateMatrixWorld(true);
+        let minY = Infinity, maxY = -Infinity, maxX = 0;
+        for (const p of pts) {
+          projected.copy(p).project(camera);
+          minY = Math.min(minY, projected.y);
+          maxY = Math.max(maxY, projected.y);
+          maxX = Math.max(maxX, Math.abs(projected.x));
+        }
+        return { minY, maxY, maxX };
+      };
+      // Пару раз: подбираем расстояние, потом сдвигаем цель по вертикали.
+      for (let pass = 0; pass < 3; pass++) {
+        let lo = 2, hi = 30;
+        for (let i = 0; i < 28; i++) {
+          const mid = (lo + hi) / 2;
+          const m = measure(mid);
+          if (m.maxY - m.minY <= top - bottom && m.maxX <= side) hi = mid;
+          else lo = mid;
+        }
+        const m = measure(hi);
+        const shift = ((m.maxY + m.minY) / 2 - (top + bottom) / 2) * 0.5;
+        // Сдвиг в экранных координатах переводим в мир вдоль «вверх» камеры.
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        const worldPerNdc = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * hi;
+        target.addScaledVector(up, shift * worldPerNdc);
+        measure(hi);
+      }
+    };
     const resize = () => {
       const w = mount.clientWidth;
       const h = Math.max(mount.clientHeight, 1);
       renderer.setSize(w, h);
-      const aspect = w / h;
-      camera.aspect = aspect;
-      camera.fov = aspect < 1 ? 62 : aspect < 1.4 ? 50 : 42;
-      const dist = aspect < 1 ? 8.4 : aspect < 1.4 ? 7.8 : 6.7;
-      lookAt.set(0, aspect < 1 ? 0.3 : 0.45, aspect < 1 ? 0.9 : 0.25);
-      camera.position.set(0.2, dist * 0.46, lookAt.z + dist * 0.88);
-      camera.lookAt(lookAt);
+      camera.aspect = w / h;
+      camera.fov = w / h < 1 ? 55 : 40;
       camera.updateProjectionMatrix();
+      fitCamera(w, h);
     };
     resize();
     const observer = new ResizeObserver(resize);
@@ -770,6 +812,22 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         stepWalker(dt);
         mark.root.position.copy(markPos);
         mark.mixer.update(dt);
+        if (lifting && mark.prop) {
+          const l = lifting;
+          l.t = Math.min(l.dur, l.t + dt);
+          const k = ease(l.t / l.dur);
+          mark.root.updateMatrixWorld(true);
+          mark.prop.getWorldPosition(propPos);
+          propPos.y += 0.05;
+          l.piece.pivot.position.lerpVectors(l.pos, propPos, k);
+          l.piece.pivot.quaternion.slerpQuaternions(l.quat, mark.root.quaternion, k);
+          l.piece.pivot.scale.setScalar(l.scale + (l.piece.carryScale - l.scale) * k);
+          if (l.t >= l.dur) {
+            lifting = null;
+            carried = l.piece;
+            l.done();
+          }
+        }
         if (carried && mark.prop) {
           mark.root.updateMatrixWorld(true);
           mark.prop.getWorldPosition(propPos);
