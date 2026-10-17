@@ -97,6 +97,17 @@ const FlightGame = dynamic(() => import("@/app/game/FlightGame"), {
   ),
 });
 
+const Su57Puzzle = dynamic(() => import("@/app/su57/Su57Puzzle"), {
+  ssr: false,
+  loading: () => (
+    <main className="loading">
+      <Plane />
+    </main>
+  ),
+});
+
+const SU57_WIN = "su57-puzzle";
+
 const NAME_KEY = "aeromark-child-name";
 // Нейтральное имя: сайт публичный, имя ребёнка задаётся во вкладке «Для взрослого»
 // или приходит из семейного профиля.
@@ -111,6 +122,7 @@ type Mode =
   | "practice"
   | "lesson"
   | "game"
+  | "su57"
   | "academy"
   | "roads"
   | "mathYear";
@@ -231,6 +243,7 @@ export default function Home() {
   );
   const gameUnlocked = saved.completed.length >= 2;
   const gameComplete = saved.gameWins.includes("hangar-parts");
+  const su57Complete = saved.gameWins.includes(SU57_WIN);
   const nextLesson = lessons.find((item) => !saved.completedLessons.includes(item.id));
   // Полёт открывается предыдущим полётом, а не победой в игре: см. tasks.ts.
   const isMissionOpen = (id: number): boolean =>
@@ -407,6 +420,18 @@ export default function Home() {
     setMode("home");
   };
 
+  const winSu57 = () => {
+    setSaved((current) =>
+      current.gameWins.includes(SU57_WIN)
+        ? current
+        : {
+            ...current,
+            stars: current.stars + 3,
+            gameWins: [...current.gameWins, SU57_WIN],
+          },
+    );
+  };
+
   const submitPin = () => {
     if (!/^\d{4}$/.test(pinEntry)) {
       setPinMessage("Введите ровно четыре цифры.");
@@ -555,6 +580,16 @@ export default function Home() {
         }
         pilotName={pilotName}
         onExit={() => setMode("home")}
+      />
+    );
+  }
+
+  if (mode === "su57") {
+    return (
+      <Su57Puzzle
+        onExit={() => setMode("home")}
+        onWin={winSu57}
+        rewardAvailable={!su57Complete}
       />
     );
   }
@@ -766,6 +801,21 @@ export default function Home() {
           <TabsContent value="missions" className="tab-content">
             <article className="action-card academy-entry">
               <div>
+                <span className="eyebrow">🛩️ ИГРА · 3D-АНГАР</span>
+                <h2>Собери Су-57 вместе с Марком</h2>
+                <p>
+                  {su57Complete
+                    ? "Самолёт уже улетал. Можно собрать его снова."
+                    : "Вы с Марком по очереди ставите детали истребителя, а потом он взлетает. Награда: 3 звезды."}
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("su57")}>
+                <Gamepad2 />
+                {su57Complete ? "Собрать снова" : "Собирать самолёт"}
+              </Button>
+            </article>
+            <article className="action-card academy-entry">
+              <div>
                 <span className="eyebrow">МАТЕМАТИКА · ВЕСЬ 1 КЛАСС</span>
                 <h2>Полёт через весь год</h2>
                 <p>
@@ -971,6 +1021,7 @@ export default function Home() {
                 {gameComplete ? "Играть снова" : "Начать игру"}
               </Button>
             </article>
+
 
             <div className="mission-grid">
               {missions.map((item) => {
