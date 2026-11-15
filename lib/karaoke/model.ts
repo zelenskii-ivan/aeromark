@@ -69,3 +69,14 @@ export function advance(cueList: Cue[], index: number, fraction: number, deltaMs
   }
   return { index: cueList.length, fraction: 0 };
 }
+
+/** Unseen first, then least recently practised. The 60-run journal covers
+ * two full rounds of the 30-text library; no separate device-only queue. */
+export function nextTextId(ids: string[], runs: Pick<ReadingRun, "textId">[], exclude?: string): string {
+  if (!ids.length) throw new Error("Empty reading library");
+  const candidates = ids.filter(id => id !== exclude);
+  if (!candidates.length) return ids[0]!;
+  const last = new Map<string, number>();
+  runs.forEach((r, index) => last.set(r.textId, index));
+  return candidates.reduce((best, id) => (last.get(id) ?? -1) < (last.get(best) ?? -1) ? id : best);
+}

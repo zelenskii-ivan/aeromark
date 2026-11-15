@@ -38,3 +38,24 @@ test('adaptation ignores unverified/short runs, requires two successes and under
  assert.equal(recommend([{...run,answers:[false]}],'cat').pace,12);
  assert.equal(recommend([{...good,elapsedMs:1000}],'cat').pace,15);
 });
+
+test('library contains 30 different stories with valid questions and syllable boundaries', () => {
+ assert.equal(READING_TEXTS.length,30);
+ assert.equal(new Set(READING_TEXTS.map(t=>t.id)).size,30);
+ assert.equal(new Set(READING_TEXTS.map(t=>prepareText(t).plain)).size,30);
+ for (const t of READING_TEXTS) {
+   const p=prepareText(t); assert.ok(p.words.length>=15,t.id);
+   for (const parts of p.parts) for (const part of parts) assert.ok((part.match(/[аеёиоуыэюя]/gi)||[]).length<=1,`${t.id}: ${part}`);
+   for (const q of t.questions) { assert.equal(q.options.length,3); assert.ok(q.options[q.correct]); assert.equal(new Set(q.options).size,3); }
+ }
+});
+
+test('automatic selection visits all texts before repeating and survives history truncation', async () => {
+ const { nextTextId } = await import('../lib/karaoke/model.ts');
+ const ids=READING_TEXTS.map(t=>t.id);let history=[];
+ for(let round=0;round<4;round++) {
+   const seen=new Set();
+   for(let i=0;i<30;i++) { const id=nextTextId(ids,history);assert.ok(!seen.has(id));seen.add(id);history=[...history,{textId:id}].slice(-60); }
+ }
+ assert.notEqual(nextTextId(ids,[],ids[0]),ids[0]);
+});
