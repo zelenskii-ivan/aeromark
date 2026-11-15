@@ -18,6 +18,7 @@ import { play, unlockAudio } from "@/lib/academy/audio";
 import { Cheer } from "@/app/cheer";
 import { clearFlight, Flight, loadFlight, saveFlight, type FlightState } from "./Flight";
 import { SpeedTest } from "./SpeedTest";
+import { Karaoke } from "../karaoke/Karaoke";
 import { PlaneIcon, RateToggle } from "./ui";
 import "./academy.css";
 
@@ -35,7 +36,8 @@ type View =
   | { name: "flight"; flight: FlightState }
   | { name: "result"; report: SessionReport; lesson: Lesson | null }
   | { name: "hangar" }
-  | { name: "speed" };
+  | { name: "speed" }
+  | { name: "karaoke" };
 
 const newSessionId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -122,6 +124,8 @@ export function Academy({
     return <SpeedTest academy={academy} update={update} onBack={() => setView({ name: "map" })} />;
   }
 
+  if (view.name === "karaoke") return <Karaoke academy={academy} update={update} onBack={() => setView({ name: "map" })} />;
+
   const next = currentLesson(academy);
   const plane = AIRCRAFT.find((item) => item.id === academy.plane) ?? AIRCRAFT[0]!;
 
@@ -179,6 +183,9 @@ export function Academy({
       </section>
 
       <nav className="ac-tiles" aria-label="Разделы Академии">
+        <button type="button" onClick={() => setView({ name: "karaoke" })}>
+          <Play aria-hidden="true" /><b>Чтение-караоке</b><span>слоги, свой темп и рассказы</span>
+        </button>
         <button type="button" onClick={startPractice}>
           <Shuffle aria-hidden="true" />
           <b>Свободный полёт</b>

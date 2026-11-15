@@ -1,0 +1,46 @@
+.kr-screen { max-width: 1100px; margin: auto; color: #172c40; }
+.kr-heading { padding: 32px 0 24px; }
+.kr-heading h1 { font-size: clamp(2rem, 5vw, 3.4rem); margin: 6px 0 12px; }
+.kr-heading p, .kr-card p { line-height: 1.65; }
+.kr-setup { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
+.kr-card { background: #fff; border: 1px solid #d6e2e9; border-radius: 22px; padding: 24px; margin-bottom: 20px; }
+.kr-card h2 { margin-bottom: 16px; font-size: 1.35rem; }
+.kr-library { display: grid; gap: 12px; }
+.kr-library button { display: grid; gap: 8px; text-align: left; padding: 18px; border: 2px solid #dce6ed; border-radius: 14px; background: #f8fbfd; }
+.kr-library button[aria-pressed="true"] { border-color: #137769; background: #eaf8f2; }
+.kr-library strong { font-size: 1.2rem; }
+.kr-library small, .kr-library span, .kr-muted { color: #4b6173; }
+.kr-card label, .kr-pace { display: block; margin: 14px 0; line-height: 1.6; }
+.kr-card select { display: block; width: 100%; border: 1px solid #839aaa; border-radius: 8px; padding: 10px; margin-top: 8px; background: white; }
+.kr-screen input[type="range"] { display: block; width: 100%; margin: 14px 0; accent-color: #137769; min-height: 32px; }
+.kr-screen input[type="checkbox"], .kr-screen input[type="radio"] { margin-right: 9px; width: 20px; height: 20px; vertical-align: middle; accent-color: #137769; }
+.kr-screen input[type="number"] { border: 1px solid #839aaa; border-radius: 8px; padding: 8px; max-width: 100px; }
+.kr-screen button { cursor: pointer; }
+.kr-screen button:disabled { opacity: .45; cursor: default; }
+.kr-screen :focus-visible { outline: 3px solid #156faf; outline-offset: 4px; }
+.kr-screen a { color: #126494; text-decoration: underline; }
+.kr-top, .kr-controls, .kr-options { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.kr-top { justify-content: space-between; }
+.kr-title { font-size: clamp(1.5rem, 4vw, 2.5rem); margin: 24px 0 8px; }
+.kr-options { margin: 24px 0 16px; }
+.kr-options label { padding: 8px 0; }
+.kr-reader { position: relative; border: 2px solid #c9dce5; border-radius: 22px; background: white; padding: 28px; height: 310px; overflow: auto; font-size: clamp(1.9rem, 5vw, 2.7rem); line-height: 2.2; white-space: pre-wrap; margin: 12px 0 24px; font-family: Arial, sans-serif; }
+.kr-reader.ribbon { white-space: nowrap; height: 180px; padding-block: 35px; }
+.kr-word { display: inline-block; border-radius: 8px; }
+.kr-word.current { box-shadow: 0 3px #137769; }
+.kr-word .lit { background: #ffe19a; color: #172c40; border-radius: 6px; }
+.kr-divider { color: #627b8d; font-size: .65em; padding: 0 .04em; }
+.kr-pace { max-width: 480px; margin-top: 28px; }
+.kr-mark-words { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.kr-mark-words button { border: 1px solid #8da3b4; border-radius: 8px; background: #fff; padding: 10px; }
+.kr-mark-words button[aria-pressed="true"] { background: #ffe1d9; border-color: #a33121; text-decoration: underline; }
+.kr-card fieldset { border: 1px solid #d6e2e9; border-radius: 12px; padding: 12px 18px; margin: 22px 0; }
+.kr-card legend { font-weight: 700; padding: 0 8px; }
+.kr-review-text { font-size: 1.3rem; }
+.kr-history { display: grid; gap: 12px; margin: 20px 0; }
+.kr-history article { border-left: 4px solid #137769; padding: 12px 18px; background: #f4faf8; border-radius: 4px 14px 14px 4px; }
+.kr-history p { margin: 6px 0; }
+.kr-summary { display: flex; flex-wrap: wrap; gap: 24px; padding-block: 16px; }
+.kr-summary b { display: block; font-size: 1.6rem; }
+@media (max-width: 680px) { .kr-setup { grid-template-columns: 1fr; } .kr-card { padding: 18px; } .kr-reader { padding: 16px; } .kr-controls button { flex: 1 1 140px; } }
+@media (prefers-reduced-motion: reduce) { .kr-screen * { scroll-behavior: auto !important; transition: none !important; } }

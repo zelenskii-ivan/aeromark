@@ -80,6 +80,7 @@ import { mathYearLessons, type Quarter } from "@/content/math-year/plan";
 import { quarterJustCompleted } from "@/lib/math-year";
 import { Academy } from "@/app/academy/Academy";
 import { ParentAcademy } from "@/app/academy/ParentAcademy";
+import { ParentKaraoke } from "@/app/karaoke/ParentKaraoke";
 import type { Academy as AcademyState } from "@/lib/academy/state";
 import {
   isPersistent,
@@ -1188,6 +1189,7 @@ export default function Home() {
                 </section>
 
                 <ParentAcademy academy={saved.academy} />
+                <ParentKaraoke runs={saved.academy.karaoke} />
 
                 <SyncPanel sync={sync} saved={saved} />
 

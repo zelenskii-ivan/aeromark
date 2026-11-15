@@ -1,0 +1,63 @@
+import { tokenize } from "../../lib/karaoke/model.ts";
+
+export type ReadingText = {
+  id: string; title: string; author: string; level: string;
+  annotated: string; source: string; rights: string; curriculum: string;
+  questions: { prompt: string; options: string[]; correct: number }[];
+};
+
+/** Vertical bars are curated instructional syllable boundaries, never word
+ * separators. They are hidden in the normal/whole-word reading view. */
+export const READING_TEXTS: ReadingText[] = [
+  {
+    id: "ushinsky-kindness-v1", title: "Худо тому, кто добра не делает никому", author: "К. Д. Ушинский",
+    level: "Из программы · читаем со взрослым",
+    annotated: "«Гри|шень|ка! О|дол|жи мне на ми|нут|ку ка|ран|даш». А Гри|шень|ка в от|вет: «Но|си свой, мой мне са|мо|му ну|жен». «Гри|ша! По|мо|ги мне у|ло|жить кни|ги в сум|ку». А Гри|ша в от|вет: «Кни|ги тво|и, сам их и у|кла|ды|вай». Лю|би|ли ли Гри|шу то|ва|ри|щи?",
+    source: "https://www.kostyor.ru/literature/liter105.html",
+    rights: "Оригинальное произведение Ушинского (1823–1870), общественное достояние в РФ. Разметка слогов AeroMark — CC0. Оформление источника не воспроизводится.",
+    curriculum: "Произведение прямо названо в ФРП литературного чтения, 1 класс (2025), раздел «Я и мои друзья». Полный текст; заглавие не входит в замер.",
+    questions: [
+      { prompt: "Что попросили у Гришеньки в первый раз?", options: ["Карандаш", "Сумку", "Книгу"], correct: 0 },
+      { prompt: "Как Гриша ответил на просьбу помочь?", options: ["Помог уложить книги", "Отказался помогать", "Позвал товарища"], correct: 1 },
+    ],
+  },
+  {
+    id: "mark-cat-v1", title: "Марк и кот", author: "Авторский учебный микротекст AeroMark",
+    level: "Старт · короткие слова",
+    annotated: "У Мар|ка кот. Кот спит. Марк на|лил ко|ту во|ды. Кот встал и стал пить. Марк рад.",
+    source: "", rights: "Создан для AeroMark; разрешены использование, изменение и распространение без ограничений (CC0).",
+    curriculum: "Подготовительное упражнение: плавное слоговое чтение и понимание. Не произведение из перечня ФРП.",
+    questions: [
+      { prompt: "Что Марк дал коту?", options: ["Воду", "Молоко", "Кашу"], correct: 0 },
+      { prompt: "Что кот делал в начале?", options: ["Бежал", "Спал", "Пил"], correct: 1 },
+    ],
+  },
+  {
+    id: "mark-boat-v1", title: "Лодка", author: "Авторский учебный микротекст AeroMark",
+    level: "Следующий шаг · небольшой рассказ",
+    annotated: "Ма|ма и Марк у пру|да. У Мар|ка лод|ка. Он пус|тил лод|ку на во|ду. Ве|тер пог|нал е|ё к бе|ре|гу. Там бы|ла у|тка. Марк дос|тал лод|ку и по|ма|хал у|тке.",
+    source: "", rights: "Создан для AeroMark; разрешены использование, изменение и распространение без ограничений (CC0).",
+    curriculum: "Подготовительное упражнение: последовательность событий, ответы на вопросы. Не произведение из перечня ФРП.",
+    questions: [
+      { prompt: "Куда ветер погнал лодку?", options: ["К дому", "К берегу", "В лес"], correct: 1 },
+      { prompt: "Кто был у берега?", options: ["Кот", "Пёс", "Утка"], correct: 2 },
+    ],
+  },
+];
+
+export function prepareText(item: ReadingText) {
+  const plain = item.annotated.replaceAll("|", "");
+  const words = tokenize(plain);
+  // Map manually reviewed boundaries onto lexical tokens; no heuristic Russian syllabifier.
+  const boundaries: number[] = [];
+  let offset = 0;
+  for (const char of item.annotated) {
+    if (char === "|") boundaries.push(offset);
+    else offset += char.length;
+  }
+  const parts = words.map(word => {
+    const cuts = [word.start, ...boundaries.filter(b => b > word.start && b < word.end), word.end];
+    return cuts.slice(1).map((end, i) => plain.slice(cuts[i], end));
+  });
+  return { plain, words, parts };
+}
