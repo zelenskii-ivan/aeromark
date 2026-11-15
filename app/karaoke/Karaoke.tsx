@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { READING_TEXTS, prepareText, type ReadingText } from "@/content/karaoke/texts";
-import { advance, appendRun, cues, metrics, recommend, type ReadingMode, type ReadingRun } from "@/lib/karaoke/model";
+import { advance, appendRun, cues, metrics, recommend, nextTextId, type ReadingMode, type ReadingRun } from "@/lib/karaoke/model";
 import type { Academy } from "@/lib/academy/state";
 import "./karaoke.css";
 
@@ -10,7 +10,7 @@ const MODES = { manual: "В своём темпе", syllables: "Караоке �
 type Props = { academy: Academy; update: (fn: (a: Academy) => Academy) => void; onBack: () => void };
 
 export function Karaoke({ academy, update, onBack }: Props) {
-  const [textId, setTextId] = useState("mark-cat-v1");
+  const [textId, setTextId] = useState(() => nextTextId(["mark-cat-v1", ...READING_TEXTS.filter(t => t.id !== "mark-cat-v1").map(t => t.id)], academy.karaoke));
   const [mode, setMode] = useState<ReadingMode>("manual");
   const [pace, setPace] = useState(15);
   const [active, setActive] = useState(false);
@@ -19,13 +19,14 @@ export function Karaoke({ academy, update, onBack }: Props) {
   const advice = recommend(academy.karaoke, textId, pace);
   if (active) return <Reading key={attempt} text={text} mode={mode} initialPace={pace}
     onSave={run => update(a => ({ ...a, karaoke: appendRun(a.karaoke, run) }))}
+    onNext={() => { setTextId(nextTextId(READING_TEXTS.map(t => t.id), academy.karaoke, textId)); setAttempt(a => a + 1); }}
     onAgain={() => setAttempt(a => a + 1)} onBack={() => setActive(false)} />;
   return <main className="ac-screen kr-screen">
     <button className="ac-btn soft" onClick={onBack}>← В Академию</button>
     <header className="kr-heading"><span className="ac-eyebrow">ЧИТАЕМ И ПОНИМАЕМ</span><h1>Чтение-караоке</h1>
       <p>Сначала спокойно и точно. Скорость придёт с практикой.</p></header>
     <div className="kr-setup">
-      <section className="kr-card"><h2>Выбери рассказ</h2><div className="kr-library">
+      <section className="kr-card"><h2>Выбери рассказ · {READING_TEXTS.length} вариантов</h2><p>Автоматически выбран ещё не прочитанный рассказ; после всей подборки вернёмся к самому давнему. Повторить знакомый можно вручную.</p><button className="ac-btn soft" onClick={() => setTextId(nextTextId(READING_TEXTS.map(t => t.id), academy.karaoke, textId))}>Другой рассказ</button><div className="kr-library">
         {READING_TEXTS.map(t => <button key={t.id} aria-pressed={t.id === textId} onClick={() => setTextId(t.id)}>
           <span>{t.level}</span><strong>{t.title}</strong><small>{prepareText(t).words.length} слов · {t.author}</small>
         </button>)}
@@ -48,9 +49,9 @@ export function Karaoke({ academy, update, onBack }: Props) {
   </main>;
 }
 
-function Reading({ text, mode, initialPace, onSave, onAgain, onBack }: {
+function Reading({ text, mode, initialPace, onSave, onAgain, onNext, onBack }: {
   text: ReadingText; mode: ReadingMode; initialPace: number;
-  onSave: (r: ReadingRun) => void; onAgain: () => void; onBack: () => void;
+  onSave: (r: ReadingRun) => void; onAgain: () => void; onNext: () => void; onBack: () => void;
 }) {
   const prepared = useMemo(() => prepareText(text), [text]);
   const timeline = useMemo(() => cues(prepared.parts, mode), [prepared.parts, mode]);
@@ -182,7 +183,7 @@ function Reading({ text, mode, initialPace, onSave, onAgain, onBack }: {
       <button className="ac-btn go" disabled={verified && attempted === 0} onClick={save}>Сохранить занятие</button>
     </section> : <section className="kr-card" role="status"><h2>Хорошая работа!</h2><p>Занятие сохранено. Отдохни или прочитай рассказ ещё раз.</p>
       {result ? <p>{result.wpm.toFixed(1)} слов/мин · {result.wcpm.toFixed(1)} верных слов/мин · точность {(result.accuracy * 100).toFixed(1)}%</p> : <p>Практика без замера скорости.</p>}
-      <div className="kr-controls"><button className="ac-btn go" onClick={onAgain}>Повторить рассказ</button><button className="ac-btn soft" onClick={onBack}>Выбрать другой</button></div>
+      <div className="kr-controls"><button className="ac-btn go" onClick={onAgain}>Повторить рассказ</button><button className="ac-btn go" onClick={onNext}>Новый рассказ →</button><button className="ac-btn soft" onClick={onBack}>Выбрать другой</button></div>
     </section>}
   </main>;
 }

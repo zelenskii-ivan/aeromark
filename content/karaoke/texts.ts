@@ -1,3 +1,4 @@
+import { PRACTICE } from "./practice.ts";
 import { tokenize } from "../../lib/karaoke/model.ts";
 
 export type ReadingText = {
@@ -43,6 +44,17 @@ export const READING_TEXTS: ReadingText[] = [
       { prompt: "Кто был у берега?", options: ["Кот", "Пёс", "Утка"], correct: 2 },
     ],
   },
+  ...PRACTICE.map((row, i): ReadingText => ({
+    id: `practice-${i + 1}-v1`, title: row[0],
+    author: "Авторский учебный микротекст AeroMark",
+    level: "Практика · новый рассказ", annotated: row[1], source: "",
+    rights: "Создан для AeroMark; разрешены использование, изменение и распространение без ограничений (CC0).",
+    curriculum: "Подготовительное упражнение: слоговое чтение и понимание. Не произведение из перечня ФРП.",
+    questions: [
+      { prompt: row[2], options: [row[3], row[4], row[5]], correct: 0 },
+      { prompt: row[6], options: [row[7], row[8], row[9]], correct: 1 },
+    ],
+  })),
 ];
 
 export function prepareText(item: ReadingText) {
