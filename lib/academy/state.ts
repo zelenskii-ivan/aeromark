@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { readingRunSchema, type ReadingRun } from "../karaoke/model.ts";
 
 /**
  * Состояние Академии внутри общего сохранения (lib/progress.ts).
@@ -75,6 +76,10 @@ export const academySchema = z.object({
     .catch({ day: 0, stars: 0 })
     .default({ day: 0, stars: 0 }),
   speed: z.array(speedRunSchema).catch([]).default([]),
+  karaoke: z.array(z.unknown()).transform(rows => rows.flatMap(row => {
+    const parsed = readingRunSchema.safeParse(row);
+    return parsed.success ? [parsed.data] : [];
+  }).slice(-60) as ReadingRun[]).catch([]).default([]),
   /** Выбранный самолёт в ангаре. */
   plane: z.string().catch("kukuruznik").default("kukuruznik"),
   /** Когда последний раз занимались — дни подряд. */
