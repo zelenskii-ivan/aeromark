@@ -8,6 +8,7 @@
 | Каталог | Что там |
 | --- | --- |
 | `app/` | Next.js App Router: главный экран, урок, 3D-игра на three.js |
+| `app/su57/`, `lib/su57/`, `public/models/` | Игровой эпизод 02: ребёнок и 3D-Марк по очереди собирают Су-57 в ангаре |
 | `content/` | Уроки, задачи диагностики и миссий, генератор примеров |
 | `app/academy/`, `lib/academy/`, `content/academy/` | Академия пилотов — раздел чтения, см. [docs/READING_ACADEMY.md](docs/READING_ACADEMY.md) |
 | `docs/METHODOLOGY.md` | Чему и в каком порядке учит приложение и почему |
