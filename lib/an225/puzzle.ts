@@ -1,9 +1,10 @@
 /**
- * Правила эпизода «Собери Мрию»: ребёнок водит Марка и носит детали, Капитан
- * Папа ставит большие детали краном. Ходят по очереди.
+ * Правила эпизода «Собери Мрию»: всё делает ребёнок. Лёгкие детали Марк
+ * носит в руках, тяжёлые ставит краном с пульта. Капитан Папа только
+ * подсказывает.
  *
- * Логика вынесена из компонента, чтобы тест проверял очерёдность, порядок
- * сборки, правило «поровну» и вопросы на счёт без three.js и WebGL.
+ * Логика вынесена из компонента, чтобы тест проверял порядок сборки,
+ * правило «поровну» и вопросы на счёт без three.js и WebGL.
  *
  * Чему учит: счёт до шести, пары («три слева и три справа»), «сколько ещё
  * осталось» — это состав числа 6 из программы 1 класса.
@@ -57,16 +58,14 @@ export type SlotId =
   | "gearR"
   | "buran";
 
-export type Turn = "player" | "papa";
-
-/** Кто может поставить деталь: Марк несёт в руках, кран поднимает тяжёлое. */
-export type Carrier = "mark" | "crane";
+/** Чем ставят деталь: Марк несёт в руках или поднимает краном. */
+export type Carrier = "hands" | "crane";
 
 export type PieceInfo = {
   id: PieceId;
   kind: PieceKind;
   name: string;
-  /** Как деталь называет голос: «Возьми …». */
+  /** Как деталь называет голос: «Ты взял …». */
   spoken: string;
   carrier: Carrier;
 };
@@ -86,15 +85,15 @@ export const PIECES: readonly PieceInfo[] = [
   { id: "stab", kind: "stab", name: "Стабилизатор", spoken: "стабилизатор — это хвостовое крылышко", carrier: "crane" },
   { id: "finL", kind: "fin", name: "Левый киль", spoken: "левый киль", carrier: "crane" },
   { id: "finR", kind: "fin", name: "Правый киль", spoken: "правый киль", carrier: "crane" },
-  { id: "eng1", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "eng2", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "eng3", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "eng4", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "eng5", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "eng6", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "mark" },
-  { id: "noseGear", kind: "noseGear", name: "Носовая стойка", spoken: "носовую стойку шасси", carrier: "mark" },
-  { id: "bogie1", kind: "bogie", name: "Тележка шасси", spoken: "тележку шасси с колёсами", carrier: "mark" },
-  { id: "bogie2", kind: "bogie", name: "Тележка шасси", spoken: "тележку шасси с колёсами", carrier: "mark" },
+  { id: "eng1", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "eng2", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "eng3", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "eng4", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "eng5", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "eng6", kind: "engine", name: "Двигатель", spoken: "двигатель", carrier: "hands" },
+  { id: "noseGear", kind: "noseGear", name: "Носовая стойка", spoken: "носовую стойку шасси", carrier: "hands" },
+  { id: "bogie1", kind: "bogie", name: "Тележка шасси", spoken: "тележку шасси с колёсами", carrier: "hands" },
+  { id: "bogie2", kind: "bogie", name: "Тележка шасси", spoken: "тележку шасси с колёсами", carrier: "hands" },
   { id: "buran", kind: "buran", name: "«Буран»", spoken: "космический корабль «Буран»", carrier: "crane" },
 ];
 
@@ -135,7 +134,6 @@ export function slotInfo(id: SlotId): SlotInfo {
 export type PuzzleState = {
   /** Какая деталь в каком гнезде. Порядок вставки — порядок сборки. */
   placed: Partial<Record<SlotId, PieceId>>;
-  turn: Turn;
   /** Промахи ребёнка — только для подсказок, не для оценки. */
   misses: number;
   /** Вопросы на счёт, которые уже звучали. */
@@ -143,7 +141,7 @@ export type PuzzleState = {
 };
 
 export function startPuzzle(): PuzzleState {
-  return { placed: {}, turn: "papa", misses: 0, asked: [] };
+  return { placed: {}, misses: 0, asked: [] };
 }
 
 export const placedCount = (s: PuzzleState) => Object.keys(s.placed).length;
@@ -164,7 +162,7 @@ export function slotOpen(s: PuzzleState, slot: SlotId): boolean {
   return slotInfo(slot).needs.every((n) => isFilled(s, n));
 }
 
-/** Гнёзда, куда эта деталь подходит по форме (без учёта очереди и порядка). */
+/** Гнёзда, куда эта деталь подходит по форме (без учёта порядка сборки). */
 export function slotsForPiece(piece: PieceId): SlotId[] {
   const info = pieceInfo(piece);
   if (info.kind === "wing" || info.kind === "fin") {
@@ -177,8 +175,6 @@ export function slotsForPiece(piece: PieceId): SlotId[] {
 export type Refusal =
   /** Деталь уже стоит. */
   | "placed"
-  /** Не тот ход. */
-  | "turn"
   /** Деталь не той формы для этого места. */
   | "shape"
   /** Крепить ещё не к чему: например, двигатель без крыла. */
@@ -187,26 +183,14 @@ export type Refusal =
   | "taken"
   /** На этой стороне уже больше двигателей: самолёт накренится. */
   | "balance"
-  /** Тяжёлую деталь Марку не поднять — её ставит кран. */
-  | "heavy";
-
-/**
- * Можно ли ребёнку (через Марка) взять эту деталь прямо сейчас.
- * Возвращает null, если можно, или причину отказа.
- */
-export function canPick(s: PuzzleState, piece: PieceId): Refusal | null {
-  if (isPlaced(s, piece)) return "placed";
-  if (s.turn !== "player") return "turn";
-  const info = pieceInfo(piece);
-  if (info.carrier !== "mark") return "heavy";
-  if (!openSlotsFor(s, piece).length) return "needs";
-  return null;
-}
+  /** Тяжёлую деталь руками не поднять — её ставят краном. */
+  | "heavy"
+  /** Лёгкую деталь краном не берут — её несут в руках. */
+  | "light";
 
 /** Причина, по которой деталь нельзя поставить в гнездо, или null. */
-export function refusal(s: PuzzleState, who: Turn, piece: PieceId, slot: SlotId): Refusal | null {
+export function refusal(s: PuzzleState, piece: PieceId, slot: SlotId): Refusal | null {
   if (isPlaced(s, piece)) return "placed";
-  if (isComplete(s) || s.turn !== who) return "turn";
   if (!slotsForPiece(piece).includes(slot)) return "shape";
   if (isFilled(s, slot)) return "taken";
   if (!slotOpen(s, slot)) return "needs";
@@ -220,85 +204,35 @@ export function refusal(s: PuzzleState, who: Turn, piece: PieceId, slot: SlotId)
   return null;
 }
 
+/** Куда деталь можно поставить прямо сейчас (с правилом пары). */
+export function openSlotsFor(s: PuzzleState, piece: PieceId): SlotId[] {
+  return slotsForPiece(piece).filter((slot) => refusal(s, piece, slot) === null);
+}
+
+/** Можно ли взять деталь этим способом прямо сейчас; null — можно. */
+export function canTake(s: PuzzleState, piece: PieceId, by: Carrier): Refusal | null {
+  if (isPlaced(s, piece)) return "placed";
+  const info = pieceInfo(piece);
+  if (info.carrier !== by) return by === "hands" ? "heavy" : "light";
+  if (!openSlotsFor(s, piece).length) return "needs";
+  return null;
+}
+
+/** Детали, которые можно взять прямо сейчас этим способом. */
+export function available(s: PuzzleState, by: Carrier): PieceId[] {
+  return PIECES.filter((p) => canTake(s, p.id, by) === null).map((p) => p.id);
+}
+
 export type PlaceResult = { state: PuzzleState; ok: boolean; why: Refusal | null };
 
-/**
- * Ход: деталь `piece` ставится в гнездо `slot`. После удачного хода очередь
- * переходит к другому. Первый ход Папы — фюзеляж — это показ, после него
- * всегда ход ребёнка. «Буран» в конце ставят вместе: ход ребёнка, кран Папы.
- */
-export function place(s: PuzzleState, who: Turn, piece: PieceId, slot: SlotId): PlaceResult {
-  const why = refusal(s, who, piece, slot);
+/** Ставим деталь в гнездо. Неудача по форме, порядку или паре — промах. */
+export function place(s: PuzzleState, piece: PieceId, slot: SlotId): PlaceResult {
+  const why = refusal(s, piece, slot);
   if (why) {
-    const counts = who === "player" && (why === "shape" || why === "balance" || why === "needs");
+    const counts = why === "shape" || why === "balance" || why === "needs";
     return { state: counts ? { ...s, misses: s.misses + 1 } : s, ok: false, why };
   }
-  const placed = { ...s.placed, [slot]: piece };
-  const next: PuzzleState = { ...s, placed };
-  next.turn = nextTurn(next, who);
-  return { state: next, ok: true, why: null };
-}
-
-/**
- * Чей ход дальше. Обычно — другого. Но если у одного нечего ставить, ходит
- * другой: например, когда Папе остался только «Буран», его ставят по ходу
- * ребёнка, а когда ребёнку нечего нести, свою деталь ставит Папа.
- */
-export function nextTurn(s: PuzzleState, who: Turn): Turn {
-  if (isComplete(s)) return who;
-  const other: Turn = who === "player" ? "papa" : "player";
-  const has = (t: Turn) => (t === "player" ? playerHasMove(s) : papaChoice({ ...s, turn: "papa" }) !== null);
-  if (has(other)) return other;
-  return has(who) ? who : other;
-}
-
-/** Есть ли у ребёнка что ставить: деталь для Марка или общий финальный «Буран». */
-export function playerHasMove(s: PuzzleState): boolean {
-  if (slotOpen(s, "buran")) return true;
-  const t = { ...s, turn: "player" as const };
-  return PIECES.some((p) => p.carrier === "mark" && !isPlaced(s, p.id) && openSlotsFor(t, p.id).length > 0);
-}
-
-/** Детали, которые ребёнок может взять прямо сейчас. */
-export function pickable(s: PuzzleState): PieceId[] {
-  return PIECES.filter((p) => canPick({ ...s, turn: "player" }, p.id) === null).map((p) => p.id);
-}
-
-/**
- * Куда можно поставить деталь из рук прямо сейчас: открытые гнёзда её формы,
- * с учётом правила пары для двигателей.
- */
-export function openSlotsFor(s: PuzzleState, piece: PieceId, who: Turn = "player"): SlotId[] {
-  return slotsForPiece(piece).filter((slot) => refusal({ ...s, turn: who }, who, piece, slot) === null);
-}
-
-/** Порядок, в котором Папа ставит краном: каркас, потом хвост. */
-const PAPA_ORDER: PieceId[] = ["fuselage", "wingL", "wingR", "stab", "finL", "finR"];
-
-/**
- * Что ставит Папа своим ходом. Сначала каркас по порядку, потом —
- * двигатель на ту сторону, где их меньше (Папа тоже держит пару).
- * «Буран» Папа один не ставит: это общий финал по ходу ребёнка.
- */
-export function papaChoice(s: PuzzleState): { piece: PieceId; slot: SlotId } | null {
-  for (const piece of PAPA_ORDER) {
-    if (isPlaced(s, piece)) continue;
-    const slot = slotsForPiece(piece).find((x) => slotOpen(s, x));
-    if (slot) return { piece, slot };
-  }
-  const engine = PIECES.find((p) => p.kind === "engine" && !isPlaced(s, p.id));
-  if (!engine) return null;
-  const left = enginesOn(s, "L");
-  const right = enginesOn(s, "R");
-  const order: Side[] = left <= right ? ["L", "R"] : ["R", "L"];
-  for (const side of order) {
-    // Ближнее к фюзеляжу гнездо — первым, как на настоящей сборке.
-    const slot = SLOTS.find((x) => x.kind === "engine" && x.side === side && slotOpen(s, x.id));
-    if (slot && refusal({ ...s, turn: "papa" }, "papa", engine.id, slot.id) === null) {
-      return { piece: engine.id, slot: slot.id };
-    }
-  }
-  return null;
+  return { state: { ...s, placed: { ...s.placed, [slot]: piece } }, ok: true, why: null };
 }
 
 // ---------- вопросы на счёт ----------
@@ -325,9 +259,11 @@ const ENGINE_SLOTS_R = SLOTS.filter((x) => x.kind === "engine" && x.side === "R"
  */
 export function questionDue(s: PuzzleState): Question | null {
   const engines = enginesOn(s, "L") + enginesOn(s, "R");
-  const due = (q: Question) => (s.asked.includes(q.id) ? null : q);
+  // Все вопросы, уместные сейчас, по порядку; задаём первый ещё не заданный.
+  // (Раньше уже заданный вопрос про двигатели заслонял вопрос про кили.)
+  const candidates: Question[] = [];
   if (engines === 2) {
-    return due({
+    candidates.push({
       id: "engines2",
       text: "Посчитай: сколько двигателей уже стоит на крыльях?",
       answer: 2,
@@ -337,7 +273,7 @@ export function questionDue(s: PuzzleState): Question | null {
     });
   }
   if (engines === 4) {
-    return due({
+    candidates.push({
       id: "enginesLeft4",
       text: "Всего у Мрии шесть двигателей. Четыре уже стоят. Сколько ещё нужно поставить?",
       answer: 2,
@@ -346,28 +282,28 @@ export function questionDue(s: PuzzleState): Question | null {
       hint: "Посмотри на пустые места под крыльями.",
     });
   }
-  if (engines === 6 && !s.asked.includes("enginesSide")) {
-    return {
-      id: "enginesSide",
-      text: "Все двигатели на месте! Сколько двигателей на одном крыле?",
-      answer: 3,
-      options: [2, 3, 6],
-      count: { slots: ENGINE_SLOTS_R, mode: "filled" },
-      hint: "Посчитай двигатели на ближнем крыле.",
-    };
-  }
-  if (engines === 6 && s.asked.includes("enginesSide")) {
-    return due({
-      id: "enginesTotal",
-      text: "Три на одном крыле и три на другом. Сколько всего?",
-      answer: 6,
-      options: [3, 5, 6],
-      count: { slots: ENGINE_SLOTS, mode: "filled" },
-      hint: "Три и три. Считаем все.",
-    });
+  if (engines === 6) {
+    candidates.push(
+      {
+        id: "enginesSide",
+        text: "Все двигатели на месте! Сколько двигателей на одном крыле?",
+        answer: 3,
+        options: [2, 3, 6],
+        count: { slots: ENGINE_SLOTS_R, mode: "filled" },
+        hint: "Посчитай двигатели на ближнем крыле.",
+      },
+      {
+        id: "enginesTotal",
+        text: "Три на одном крыле и три на другом. Сколько всего?",
+        answer: 6,
+        options: [3, 5, 6],
+        count: { slots: ENGINE_SLOTS, mode: "filled" },
+        hint: "Три и три. Считаем все.",
+      },
+    );
   }
   if (isFilled(s, "finL") && isFilled(s, "finR")) {
-    return due({
+    candidates.push({
       id: "fins",
       text: "Сколько килей на хвосте у Мрии?",
       answer: 2,
@@ -376,7 +312,7 @@ export function questionDue(s: PuzzleState): Question | null {
       hint: "Кили — это высокие стенки на концах хвоста.",
     });
   }
-  return null;
+  return candidates.find((q) => !s.asked.includes(q.id)) ?? null;
 }
 
 export function markAsked(s: PuzzleState, id: QuestionId): PuzzleState {
