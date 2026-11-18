@@ -65,10 +65,10 @@
   color: #fff;
   background: #10243ee8;
 }
-.mriya-turn.player {
+.mriya-turn.run {
   background: #2f6fe4;
 }
-.mriya-turn.papa {
+.mriya-turn.crane {
   background: #d9802e;
 }
 .mriya-bubble {
@@ -306,5 +306,74 @@
   }
   .mriya-engines em {
     font-size: 18px;
+  }
+}
+
+/* Пульт крана: большая кнопка «опустить» и выход. */
+.mriya-crane {
+  position: absolute;
+  left: 50%;
+  bottom: max(26px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mriya-crane button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 22px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.mriya-crane button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.mriya-crane-go {
+  min-height: 76px;
+  padding: 0 26px;
+  font-size: clamp(18px, 2.4vw, 22px);
+  color: #fff;
+  background: #e23b3b;
+  box-shadow: inset 0 -6px 0 #a82424, 0 12px 30px #10243e40;
+}
+.mriya-crane-go.ready {
+  background: #1f9d55;
+  box-shadow: inset 0 -6px 0 #157040, 0 12px 30px #10243e40;
+  animation: mriya-pulse 1.1s ease-in-out infinite;
+}
+.mriya-crane-go svg {
+  width: 30px;
+  height: 30px;
+}
+.mriya-crane-exit {
+  min-height: 56px;
+  padding: 0 18px;
+  font-size: 16px;
+  color: #10243e;
+  background: #ffffffee;
+  box-shadow: 0 10px 26px #16445a2e;
+}
+@keyframes mriya-pulse {
+  50% {
+    transform: scale(1.05);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mriya-crane-go.ready {
+    animation: none;
+  }
+}
+@media (max-width: 640px) {
+  .mriya-crane {
+    left: auto;
+    right: 14px;
+    transform: none;
+    bottom: 160px;
+    flex-direction: column;
+    align-items: flex-end;
   }
 }

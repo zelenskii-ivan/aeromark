@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { ChevronLeft, RotateCcw, Star, Volume2 } from "lucide-react";
+import { ArrowDownToLine, ChevronLeft, LogOut, RotateCcw, Star, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playMiss, playWin } from "@/lib/celebrate";
 import { cancelSpeech, primeVoices, speakText } from "@/lib/speech";
@@ -12,14 +12,14 @@ import {
   PIECE_COUNT,
   PIECES,
   SLOTS,
-  canPick,
+  available,
+  canTake,
   enginesOn,
   isComplete,
   isFilled,
+  isPlaced,
   markAsked,
   openSlotsFor,
-  papaChoice,
-  pickable,
   pieceInfo,
   place,
   placedCount,
@@ -27,13 +27,13 @@ import {
   refusal,
   slotInfo,
   slotOpen,
+  slotsForPiece,
   startPuzzle,
   type PieceId,
   type PuzzleState,
   type Question,
   type Refusal,
   type SlotId,
-  type Turn,
 } from "@/lib/an225/puzzle";
 import {
   MOTION,
@@ -77,14 +77,22 @@ const RACK_SPACING = 0.95;
 const MARK_HOME = new THREE.Vector3(6.1, 0, 4.0);
 const DAD_HOME = new THREE.Vector3(-6.5, 0, 3.7);
 const CONSOLE = new THREE.Vector3(-7.4, 0, 4.7);
-/** Большая красная кнопка крана: к ней Марк бежит за «Бураном». */
+/** Красный пульт крана для Марка и где Марк за ним стоит. */
 const BUTTON = new THREE.Vector3(-5.4, 0, 5.0);
+const CONSOLE_SPOT = new THREE.Vector3(-5.3, 0, 4.38);
 const CRANE_TOP = 5.6;
 /** Насколько камера ближе общего плана: Марк крупнее, а стеллаж и самолёт всё равно видно. */
 const CAM_ZOOM = 0.62;
 const HOOK_HIGH = 4.6;
-/** Где кран стоит без дела: в углу у задней стены, вне кадра с самолётом. */
-const CRANE_PARK = new THREE.Vector3(-8.2, 0, -6.4);
+/** Где кран стоит в начале и куда уезжает перед взлётом: у пульта, сбоку от самолёта. */
+const CRANE_HOME = new THREE.Vector3(-5.2, 0, 2.6);
+/** Докуда ездит крюк. */
+const CRANE_BOUNDS: Box = { minX: -8.3, maxX: 8.3, minZ: -6.6, maxZ: 5.6 };
+/** Скорость крана, м/с: медленнее Марка, чтобы ребёнок успевал прицелиться. */
+const CRANE_SPEED = 2.2;
+/** Насколько точно надо навести крюк: на деталь — и на место на самолёте. */
+const GRAB_RADIUS = 1.0;
+const DROP_RADIUS = 0.9;
 
 const GHOST_COLOR = 0x3d8bff;
 const GHOST_OPACITY = 0.3;
@@ -158,7 +166,8 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
   const [rewardAvailable] = useState(rewardProp);
   const [phase, setPhase] = useState<Phase>("intro");
   const [placed, setPlaced] = useState(0);
-  const [turn, setTurn] = useState<Turn>("papa");
+  const [control, setControl] = useState<"run" | "crane">("run");
+  const [craneUi, setCraneUi] = useState<{ label: string; ready: boolean; busy: boolean } | null>(null);
   const [message, setMessage] = useState("");
   const [holding, setHolding] = useState<string | null>(null);
   const [question, setQuestion] = useState<{ text: string; options: number[]; locked: boolean } | null>(null);
@@ -166,6 +175,8 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
   const lastSpoken = useRef("");
   const startRef = useRef<() => void>(() => {});
   const answerRef = useRef<(n: number) => void>(() => {});
+  const craneActionRef = useRef<() => void>(() => {});
+  const exitCraneRef = useRef<() => void>(() => {});
   /** Джойстик: x — вправо по экрану, y — вверх по экрану, длина 0..1. */
   const stickRef = useRef({ x: 0, y: 0 });
 
@@ -239,7 +250,7 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
     const ghostMaterial = () =>
       new THREE.MeshBasicMaterial({ color: GHOST_COLOR, transparent: true, opacity: GHOST_OPACITY, depthWrite: false });
 
-    const rackOrder = shuffle(PIECES.filter((p) => p.carrier === "mark").map((p) => p.id));
+    const rackOrder = shuffle(PIECES.filter((p) => p.carrier === "hands").map((p) => p.id));
     const rackX = (i: number) => (i - (rackOrder.length - 1) / 2) * RACK_SPACING;
     const palletMat = new THREE.MeshStandardMaterial({ color: 0xc89a5c, roughness: 0.85 });
     const standMat = new THREE.MeshStandardMaterial({ color: 0x3b4350, roughness: 0.75 });
@@ -346,62 +357,60 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
 
     // ---------- кран ----------
     const crane = buildCrane(scene);
-    const craneState = { x: CRANE_PARK.x, z: CRANE_PARK.z, hook: HOOK_HIGH };
+    const craneState = { x: CRANE_HOME.x, z: CRANE_HOME.z, hook: HOOK_HIGH, vx: 0, vz: 0 };
     let craneLoad: Piece | null = null;
-    /** Кран один: новое движение ждёт, пока закончится предыдущее. */
-    let craneChain: Promise<void> = Promise.resolve();
-    const craneMove = (x: number, z: number, hook: number) => {
-      const next = craneChain.then(() => craneMoveNow(x, z, hook));
-      craneChain = next;
-      return next;
-    };
-    const craneMoveNow = async (x: number, z: number, hook: number) => {
-      const from = { ...craneState };
-      const d = Math.hypot(x - from.x, z - from.z);
-      if (d > 0.02) {
-        await tween(0.35 + d / 2.8, (k) => {
-          const e = ease(k);
-          craneState.x = from.x + (x - from.x) * e;
-          craneState.z = from.z + (z - from.z) * e;
-        });
-      }
+    /** Марк стоит у пульта: джойстик и нажатия двигают крюк, а не Марка. */
+    let craneMode = false;
+    /** Крюк опускается или поднимается — двигать кран нельзя. */
+    let hookBusy = false;
+    /** Куда кран едет сам после нажатия на пол, деталь или место на самолёте. */
+    let hookGoal: { x: number; z: number; then: "grab" | "drop" | null } | null = null;
+    /** Сколько кран стоит без дела с деталью — для подсказок Папы. */
+    let craneIdle = 0;
+    /** Подсказку «ты над местом» говорим один раз за перенос. */
+    let overSaid = false;
+
+    const hookTo = (y: number) => {
       const h = craneState.hook;
-      if (Math.abs(hook - h) > 0.01) {
-        await tween(0.3 + Math.abs(hook - h) / 2.2, (k) => {
-          craneState.hook = h + (hook - h) * ease(k);
-        });
-      }
-    };
-    /** Кран переносит деталь в гнездо: подъём, перенос, опускание. */
-    const craneDeliver = async (piece: Piece, slot: Slot) => {
-      const hang = piece.halfH + 0.14;
-      const start = piece.pivot.position.clone();
-      const startHang = piece.halfH * piece.pivot.scale.x + 0.14;
-      await craneMove(start.x, start.z, HOOK_HIGH);
-      await craneMove(start.x, start.z, start.y + startHang);
-      craneLoad = piece;
-      piece.footprint = null;
-      rebuildObstacles();
-      const fromQ = piece.pivot.quaternion.clone();
-      const fromS = piece.pivot.scale.x;
-      const toQ = new THREE.Quaternion();
-      // Поднимая, разворачиваем деталь как на самолёте и возвращаем ей размер.
-      const lift = craneMove(start.x, start.z, HOOK_HIGH);
-      await tween(1.1, (k) => {
-        const e = ease(k);
-        piece.pivot.quaternion.slerpQuaternions(fromQ, toQ, e);
-        piece.pivot.scale.setScalar(fromS + (1 - fromS) * e);
+      return tween(0.25 + Math.abs(y - h) / 2.6, (k) => {
+        craneState.hook = h + (y - h) * ease(k);
       });
-      await lift;
-      await craneMove(slot.pos.x, slot.pos.z, HOOK_HIGH);
-      await craneMove(slot.pos.x, slot.pos.z, slot.pos.y + hang);
-      craneLoad = null;
-      piece.pivot.position.copy(slot.pos);
-      piece.pivot.quaternion.identity();
-      piece.pivot.scale.setScalar(1);
-      // Отгоняем кран к задней стене, чтобы балка не висела над самолётом.
-      void craneMove(slot.pos.x, slot.pos.z, HOOK_HIGH).then(() => craneMove(CRANE_PARK.x, CRANE_PARK.z, HOOK_HIGH));
     };
+    const craneSlide = (x: number, z: number) => {
+      const fx = craneState.x;
+      const fz = craneState.z;
+      const d = Math.hypot(x - fx, z - fz);
+      if (d < 0.01) return Promise.resolve();
+      return tween(0.15 + d / 3, (k) => {
+        craneState.x = fx + (x - fx) * ease(k);
+        craneState.z = fz + (z - fz) * ease(k);
+      });
+    };
+    // Жёлтое пятно на полу точно под крюком: ребёнку видно, куда опустится груз.
+    const hookSpot = new THREE.Mesh(
+      new THREE.RingGeometry(0.22, 0.34, 32),
+      new THREE.MeshBasicMaterial({ color: 0xf2b430, transparent: true, opacity: 0.85, depthWrite: false }),
+    );
+    hookSpot.rotation.x = -Math.PI / 2;
+    hookSpot.visible = false;
+    scene.add(hookSpot);
+    /** Джойстиком уже подвели к пульту и получили отказ — не повторяем, пока не отойдёт. */
+    let consoleRefused = false;
+    /**
+     * Крюк с грузом идёт так, чтобы низ детали был чуть выше самолёта
+     * (кили до 2,5 м). Выше не надо: с наклонной камеры высоко висящая
+     * деталь кажется сдвинутой от места, и прицелиться трудно.
+     */
+    const carryHook = (piece: Piece) => Math.min(HOOK_HIGH, 2.75 + 2 * piece.halfH + 0.14);
+    // Отвесная линия от груза (или крюка) до пола — куда опустится деталь.
+    const dropLine = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.014, 1, 6),
+      new THREE.MeshBasicMaterial({ color: 0xf2b430, transparent: true, opacity: 0.7, depthWrite: false }),
+    );
+    dropLine.visible = false;
+    scene.add(dropLine);
+    /** Насколько ниже крюка висит центр детали. */
+    const hangOf = (piece: Piece) => piece.halfH * piece.pivot.scale.x + 0.14;
 
     // ---------- препятствия для Марка ----------
     let obstacles: Obstacle[] = [];
@@ -411,7 +420,7 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         { minX: FUSE.back - 0.05, maxX: FUSE.front + 0.05, minZ: -0.45, maxZ: 0.45 },
         // Стеллаж.
         { minX: rackX(0) - 0.5, maxX: rackX(rackOrder.length - 1) + 0.5, minZ: RACK_Z - 0.35, maxZ: RACK_Z + 0.35 },
-        // Пульт крана и кнопка.
+        // Пульт Папы и пульт крана для Марка.
         { minX: CONSOLE.x - 0.4, maxX: CONSOLE.x + 0.4, minZ: CONSOLE.z - 0.35, maxZ: CONSOLE.z + 0.35 },
         { x: BUTTON.x, z: BUTTON.z, r: 0.22 },
         { x: dadPos.x, z: dadPos.z, r: 0.3 },
@@ -528,6 +537,16 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       playOn(dad, "Idle", false, 0.4);
       dadBusy = false;
     };
+    /** Папа показывает рукой, когда подсказывает. */
+    const dadPoint = () => {
+      if (!dad || dadBusy) return;
+      dadBusy = true;
+      const d = playOn(dad, "Point", true, 0.2);
+      void wait(d || 1).then(() => {
+        playOn(dad, "Idle", false, 0.4);
+        dadBusy = false;
+      });
+    };
 
     const turnMarkTo = (yaw: number, dur = 0.25) => {
       const from = walker.yaw;
@@ -541,12 +560,12 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
 
     // ---------- состояние игры ----------
     let state: PuzzleState = startPuzzle();
-    let goal: { kind: "pick"; piece: PieceId } | { kind: "place"; slot: SlotId } | { kind: "button" } | null = null;
+    let goal: { kind: "pick"; piece: PieceId } | { kind: "place"; slot: SlotId } | { kind: "console" } | null = null;
     /** Гнездо, у которого уже объяснили, почему нельзя: не повторяем, пока Марк не отойдёт. */
     let refusedAt: SlotId | null = null;
     let idleTimer = 0;
-    let busy = true; // идёт ход Папы, вопрос или финал
-    let firstPlayerTurn = true;
+    let busy = true; // вопрос, финал или вступление
+    let firstCrane = true;
     const missesOn = new Map<string, number>();
     const pulsing = new Set<SlotId>();
 
@@ -558,19 +577,17 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         m.emissiveIntensity = on ? 0.35 : 1;
       }
     };
+    /** Прозрачные места на самолёте: для детали в руках или на крюке. */
     const showGhosts = () => {
+      const load = carried ?? craneLoad;
+      const kind = load ? pieceInfo(load.id).kind : null;
       for (const slot of slots.values()) {
-        let on = false;
-        if (carried) on = !isFilled(state, slot.id) && slotOpen(state, slot.id) && openSlotsFor({ ...state, turn: "player" }, carried.id).concat(
-          // Двигатель показываем и на «неправильном» крыле: выбрать сторону — задача ребёнка.
-          SLOTS.filter((x) => x.kind === pieceInfo(carried!.id).kind && slotOpen(state, x.id)).map((x) => x.id),
-        ).includes(slot.id);
-        if (craneTarget === slot.id) on = true;
-        if (slot.id === "buran" && state.turn === "player" && slotOpen(state, "buran")) on = true;
-        slot.ghost.visible = on;
+        // Показываем все открытые места этой формы — и на «неправильном»
+        // крыле тоже: выбрать сторону для двигателя — задача ребёнка.
+        slot.ghost.visible =
+          kind !== null && slotInfo(slot.id).kind === kind && slotOpen(state, slot.id) && slotsForPiece(load!.id).includes(slot.id);
       }
     };
-    let craneTarget: SlotId | null = null;
 
     const flyTo = (piece: Piece, target: THREE.Vector3, scale: number, dur = 0.6, arc = 0.4) => {
       const from = piece.pivot.position.clone();
@@ -586,12 +603,32 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       });
     };
 
+    let lastCraneUi = "";
     const syncUi = () => {
       setPlaced(placedCount(state));
-      setTurn(state.turn);
+      setControl(craneMode ? "crane" : "run");
       const l = enginesOn(state, "L");
       const r = enginesOn(state, "R");
       setCounter(l + r > 0 ? { left: l, right: r } : null);
+    };
+    /** Подпись большой кнопки крана — по тому, что сейчас под крюком. */
+    const syncCraneUi = () => {
+      let ui: { label: string; ready: boolean } | null = null;
+      if (craneMode) {
+        if (craneLoad) {
+          const near = slotUnderHook(craneLoad);
+          ui = near ? { label: "Поставить", ready: true } : { label: "Опустить", ready: false };
+        } else {
+          const near = heavyUnderHook();
+          ui = near ? { label: `Взять: ${pieceInfo(near.id).name}`, ready: true } : { label: "Опустить крюк", ready: false };
+        }
+        if (hookBusy) ui = { ...ui, ready: false };
+      }
+      const key = JSON.stringify(ui) + hookBusy;
+      if (key !== lastCraneUi) {
+        lastCraneUi = key;
+        setCraneUi(ui ? { ...ui, busy: hookBusy } : null);
+      }
     };
 
     const sideWord = (side: "L" | "R") => (side === "L" ? "левое" : "правое");
@@ -599,18 +636,23 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       const info = pieceInfo(piece);
       switch (why) {
         case "heavy":
-          return `Это ${info.spoken}. Деталь тяжёлая — её поднимет кран Капитана Папы.`;
-        case "turn":
-          return "Подожди, сейчас ход Папы. А побегать можно!";
+          return `Это ${info.spoken}. Деталь тяжёлая — её ставят краном. Беги к красному пульту!`;
+        case "light":
+          return "Эта деталь лёгкая — Марк отнесёт её в руках. Выйди из крана и беги к стеллажу.";
         case "needs":
           if (info.kind === "engine") {
             const missing = !isFilled(state, "wingL") || !isFilled(state, "wingR");
-            return missing
-              ? "Двигатели крепят под крылья, а крыльев ещё нет. Возьми колёса."
-              : "Сюда пока нельзя.";
+            return missing ? "Двигатели крепят под крылья. Сначала поставь краном оба крыла." : "Сюда пока нельзя.";
           }
-          return "Сюда пока не к чему крепить.";
+          if (info.kind === "fin") return "Кили крепятся к стабилизатору. Сначала поставь краном стабилизатор.";
+          if (info.kind === "buran") return "«Буран» ставим последним, когда весь самолёт готов.";
+          if (info.kind === "fuselage") return "";
+          return "Сначала нужен фюзеляж — к нему всё крепится.";
         case "shape":
+          if (info.kind === "wing" || info.kind === "fin") {
+            const mine = piece.endsWith("L") ? "левое" : "правое";
+            return `Это место для другой стороны. У тебя ${info.kind === "wing" ? `${mine} крыло` : `${mine === "левое" ? "левый" : "правый"} киль`} — неси на другую сторону.`;
+          }
           return info.kind === "bogie"
             ? "Тележка с колёсами встаёт под живот самолёта, сбоку. Впереди — место для носовой стойки."
             : info.kind === "noseGear"
@@ -630,13 +672,27 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       }
     };
 
-    // ---------- действия Марка ----------
+    /** «Левее и дальше» — куда вести крюк, глазами ребёнка (от камеры). */
+    const directionTo = (x: number, z: number): string => {
+      const dx = x - craneState.x;
+      const dz = z - craneState.z;
+      const right = dx * camRight.x + dz * camRight.z;
+      const fwd = dx * camFwd.x + dz * camFwd.z;
+      const parts: string[] = [];
+      if (Math.abs(right) > 0.45) parts.push(right > 0 ? "правее" : "левее");
+      if (Math.abs(fwd) > 0.45) parts.push(fwd > 0 ? "дальше" : "ближе");
+      if (!parts.length) return "Ты почти на месте!";
+      const text = parts.join(" и ");
+      return text[0]!.toUpperCase() + text.slice(1) + "!";
+    };
+
+    // ---------- руками ----------
     const goTo = (target: THREE.Vector3) => {
       walker = { ...walker, path: findPath(walker.pos, { x: target.x, z: target.z }, obstacles, BOUNDS) };
     };
 
     const pickUp = async (piece: Piece) => {
-      const why = canPick(state, piece.id);
+      const why = canTake(state, piece.id, "hands");
       if (why) {
         playMiss();
         say(explain(why, piece.id));
@@ -678,16 +734,15 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
     const placeAt = async (slot: Slot) => {
       if (!carried) return;
       const piece = carried;
-      const why = refusal(state, "player", piece.id, slot.id);
+      const why = refusal(state, piece.id, slot.id);
       if (why) {
-        const r = place(state, "player", piece.id, slot.id);
-        state = r.state;
+        state = place(state, piece.id, slot.id).state;
         refusedAt = slot.id;
         playMiss();
         say(explain(why, piece.id, slot.id));
         const misses = (missesOn.get(piece.id) ?? 0) + 1;
         missesOn.set(piece.id, misses);
-        if (misses >= 2) for (const s of openSlotsFor({ ...state, turn: "player" }, piece.id)) pulsing.add(s);
+        if (misses >= 2) for (const s of openSlotsFor(state, piece.id)) pulsing.add(s);
         void (async () => {
           markBusy = true;
           await turnMarkTo(slot.face, 0.2);
@@ -709,7 +764,7 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       setHolding(null);
       await flyTo(piece, slot.pos, 1, 0.55, slot.pos.y > 0.5 ? 0.25 : 0.15);
       piece.pivot.position.copy(slot.pos);
-      state = place(state, "player", piece.id, slot.id).state;
+      state = place(state, piece.id, slot.id).state;
       pulsing.clear();
       missesOn.delete(piece.id);
       playWin();
@@ -720,67 +775,185 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       await afterPlacement();
     };
 
-    const pressButton = async () => {
-      if (state.turn !== "player" || !slotOpen(state, "buran") || markBusy) return;
-      markBusy = true;
-      busy = true;
+    // ---------- кран ----------
+    /** Тяжёлая деталь прямо под крюком (ещё не поставленная). */
+    const heavyUnderHook = (): Piece | null => {
+      let best: Piece | null = null;
+      let bestD = GRAB_RADIUS;
+      for (const piece of pieces.values()) {
+        if (pieceInfo(piece.id).carrier !== "crane" || isPlaced(state, piece.id) || piece === craneLoad) continue;
+        const p = piece.pivot.position;
+        const d = Math.hypot(p.x - craneState.x, p.z - craneState.z);
+        if (d < bestD) {
+          bestD = d;
+          best = piece;
+        }
+      }
+      return best;
+    };
+    /** Место на самолёте под крюком, куда подходит деталь этой формы. */
+    const slotUnderHook = (piece: Piece): Slot | null => {
+      const kind = pieceInfo(piece.id).kind;
+      let best: Slot | null = null;
+      let bestD = DROP_RADIUS;
+      for (const slot of slots.values()) {
+        if (slotInfo(slot.id).kind !== kind || isFilled(state, slot.id)) continue;
+        const d = Math.hypot(slot.pos.x - craneState.x, slot.pos.z - craneState.z);
+        if (d < bestD) {
+          bestD = d;
+          best = slot;
+        }
+      }
+      return best;
+    };
+    /** Куда сейчас нести груз крана: ближайшее подходящее открытое место. */
+    const targetFor = (piece: Piece): Slot | null => {
+      let best: Slot | null = null;
+      let bestD = Infinity;
+      for (const id of openSlotsFor(state, piece.id)) {
+        const slot = slots.get(id)!;
+        const d = Math.hypot(slot.pos.x - craneState.x, slot.pos.z - craneState.z);
+        if (d < bestD) {
+          bestD = d;
+          best = slot;
+        }
+      }
+      return best;
+    };
+
+    const enterCrane = async () => {
+      if (craneMode || markBusy) return;
+      if (carried) {
+        say("Руки заняты. Сначала поставь деталь на самолёт, а потом — к пульту.");
+        return;
+      }
+      if (!available(state, "crane").length) {
+        say("Сейчас краном ставить нечего. Неси детали со стеллажа руками.");
+        dadPoint();
+        return;
+      }
       goal = null;
       walker = { ...walker, path: [], speed: 0 };
+      markBusy = true;
       await turnMarkTo(Math.atan2(BUTTON.x - walker.pos.x, BUTTON.z - walker.pos.z), 0.2);
       const d = playOn(mark, "Point", true, 0.15) || 0.8;
       buttonPress();
-      say("Кнопка нажата! Кран поднимает «Буран».");
-      await wait(d * 0.8);
+      await wait(d * 0.6);
       playOn(mark, "Idle", false, 0.3);
       markBusy = false;
-      const piece = pieces.get("buran")!;
-      const slot = slots.get("buran")!;
-      craneTarget = "buran";
-      showGhosts();
-      void playOn(dad, "Point", true, 0.2);
-      await craneDeliver(piece, slot);
-      craneTarget = null;
-      state = place(state, "player", "buran", "buran").state;
-      playWin();
-      await afterPlacement();
+      craneMode = true;
+      hookGoal = null;
+      craneIdle = 0;
+      syncUi();
+      dadPoint();
+      const next = available(state, "crane").map((id) => pieceInfo(id).name.toLowerCase());
+      if (firstCrane) {
+        firstCrane = false;
+        say(
+          `Ты за пультом крана! Джойстиком веди крюк к детали — или просто нажми на неё. Потом жми большую кнопку. Начнём: ${next[0]}.`,
+        );
+      } else {
+        say(`Ты за пультом. Можно поставить: ${next.join(", ")}.`);
+      }
     };
 
-    // ---------- ход Папы ----------
-    const papaLine = (piece: PieceId, slot: SlotId): string => {
-      const info = pieceInfo(piece);
-      if (info.kind === "engine") {
-        const l = enginesOn(state, "L");
-        const r = enginesOn(state, "R");
-        const side = slotInfo(slot).side!;
-        return `Мой ход! Слева ${COUNT_WORDS[l]}, справа ${COUNT_WORDS[r]}. Ставлю двигатель на ${sideWord(side)} крыло.`;
+    const exitCrane = () => {
+      if (!craneMode || hookBusy) return;
+      if (craneLoad) {
+        say("Деталь ещё на крюке. Сначала поставь её на самолёт.");
+        return;
       }
-      if (info.kind === "fuselage") return "Сначала я краном поставлю фюзеляж — это корпус самолёта.";
-      return `Мой ход! Краном ставлю ${info.spoken}.`;
-    };
-    const papaTurn = async () => {
-      busy = true;
+      craneMode = false;
+      hookGoal = null;
       syncUi();
-      const choice = papaChoice(state);
-      if (!choice) return;
-      const piece = pieces.get(choice.piece)!;
-      const slot = slots.get(choice.slot)!;
-      const line = papaLine(choice.piece, choice.slot);
-      say(line);
-      if (dad && !dadBusy) {
-        dadBusy = true;
-        const d = playOn(dad, "Point", true, 0.2);
-        void wait(d || 1).then(() => {
-          playOn(dad, "Idle", false, 0.4);
-          dadBusy = false;
-        });
+      syncCraneUi();
+      say("Марк снова бегает. Неси детали со стеллажа.");
+    };
+
+    /** Большая кнопка крана: взять то, что под крюком, или поставить груз. */
+    const craneAction = async () => {
+      if (!craneMode || hookBusy || busy) return;
+      idleTimer = 0;
+      buttonPress();
+      if (!craneLoad) {
+        const piece = heavyUnderHook();
+        if (!piece) {
+          const options = available(state, "crane").map((id) => pieces.get(id)!);
+          const near = options.sort(
+            (a, b) =>
+              Math.hypot(a.pivot.position.x - craneState.x, a.pivot.position.z - craneState.z) -
+              Math.hypot(b.pivot.position.x - craneState.x, b.pivot.position.z - craneState.z),
+          )[0];
+          say(near ? `Под крюком пусто. Тяжёлая деталь — ${pieceInfo(near.id).name.toLowerCase()}. ${directionTo(near.pivot.position.x, near.pivot.position.z)}` : "Под крюком пусто.");
+          dadPoint();
+          return;
+        }
+        const why = canTake(state, piece.id, "crane");
+        if (why) {
+          playMiss();
+          say(explain(why, piece.id));
+          dadPoint();
+          return;
+        }
+        hookBusy = true;
+        syncCraneUi();
+        hookGoal = null;
+        await craneSlide(piece.pivot.position.x, piece.pivot.position.z);
+        await hookTo(piece.pivot.position.y + hangOf(piece));
+        craneLoad = piece;
+        piece.footprint = null;
+        rebuildObstacles();
+        // Поднимая, разворачиваем деталь как на самолёте и возвращаем ей размер.
+        const fromQ = piece.pivot.quaternion.clone();
+        const fromS = piece.pivot.scale.x;
+        const toQ = new THREE.Quaternion();
+        await Promise.all([
+          hookTo(carryHook(piece)),
+          tween(1.0, (k) => {
+            const e = ease(k);
+            piece.pivot.quaternion.slerpQuaternions(fromQ, toQ, e);
+            piece.pivot.scale.setScalar(fromS + (1 - fromS) * e);
+          }),
+        ]);
+        hookBusy = false;
+        overSaid = false;
+        craneIdle = 0;
+        showGhosts();
+        playWin();
+        say(`Есть! ${pieceInfo(piece.id).name} на крюке. Веди деталь к прозрачному месту на самолёте и жми «Поставить».`);
+        return;
       }
-      craneTarget = choice.slot;
-      showGhosts();
-      await Promise.all([craneDeliver(piece, slot), wait(Math.min(speechTime(line), 4))]);
-      craneTarget = null;
-      state = place(state, "papa", choice.piece, choice.slot).state;
+      const piece = craneLoad;
+      const slot = slotUnderHook(piece);
+      if (!slot) {
+        const target = targetFor(piece);
+        say(target ? `Это ещё не место. ${directionTo(target.pos.x, target.pos.z)}` : "Это ещё не место.");
+        dadPoint();
+        return;
+      }
+      const why = refusal(state, piece.id, slot.id);
+      if (why) {
+        state = place(state, piece.id, slot.id).state;
+        playMiss();
+        say(explain(why, piece.id, slot.id));
+        dadPoint();
+        return;
+      }
+      hookBusy = true;
+      hookGoal = null;
+      syncCraneUi();
+      await craneSlide(slot.pos.x, slot.pos.z);
+      await hookTo(slot.pos.y + piece.halfH + 0.14);
+      craneLoad = null;
+      piece.pivot.position.copy(slot.pos);
+      piece.pivot.quaternion.identity();
+      piece.pivot.scale.setScalar(1);
+      state = place(state, piece.id, slot.id).state;
       playWin();
+      say(pick(PRAISE));
       void dadCheer();
+      await hookTo(HOOK_HIGH);
+      hookBusy = false;
       await afterPlacement();
     };
 
@@ -838,11 +1011,13 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         };
       });
 
-    // ---------- ход за ходом ----------
+    // ---------- деталь за деталью ----------
     const afterPlacement = async () => {
+      busy = true;
       rebuildObstacles();
       showGhosts();
       syncUi();
+      syncCraneUi();
       for (;;) {
         const q = questionDue(state);
         if (!q) break;
@@ -854,29 +1029,35 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         await finale();
         return;
       }
-      await wait(0.6);
-      if (state.turn === "papa") await papaTurn();
-      else playerTurn();
+      await wait(0.4);
+      prompt();
     };
 
-    const playerTurn = () => {
+    /** Что делать дальше — одной фразой, по тому, что сейчас можно поставить. */
+    const prompt = () => {
       busy = false;
       idleTimer = 0;
       syncUi();
+      syncCraneUi();
       showGhosts();
-      if (slotOpen(state, "buran")) {
-        say("Самолёт готов! Последняя деталь — «Буран». Беги к красной кнопке крана — поставим его вместе!");
-        return;
-      }
-      const options = pickable(state);
-      const engines = options.some((id) => id.startsWith("eng"));
-      const gears = options.some((id) => !id.startsWith("eng"));
+      const hands = available(state, "hands");
+      const heavy = available(state, "crane");
+      const engines = hands.some((id) => id.startsWith("eng"));
+      const gears = hands.some((id) => !id.startsWith("eng"));
       const what = engines && gears ? "двигатель или колёса" : engines ? "двигатель" : "колёса";
-      if (firstPlayerTurn) {
-        firstPlayerTurn = false;
-        say(`Твой ход! Беги к стеллажу и возьми ${what}. Нажми на деталь — Марк сам побежит. А можно водить его джойстиком.`);
+      const heavyName = heavy[0] ? pieceInfo(heavy[0]).name.toLowerCase() : "";
+      if (heavy.includes("buran")) {
+        say(craneMode ? "Последняя деталь — «Буран»! Веди крюк к нему." : "Самолёт готов! Последняя деталь — «Буран». Беги к красному пульту крана!");
+      } else if (heavy.length && hands.length) {
+        say(
+          craneMode
+            ? `Краном можно поставить: ${heavy.map((id) => pieceInfo(id).name.toLowerCase()).join(", ")}. А руками — ${what}.`
+            : `Возьми на стеллаже ${what} — или беги к пульту и поставь краном ${heavyName}.`,
+        );
+      } else if (heavy.length) {
+        say(craneMode ? `Следующая деталь — ${heavyName}. Веди крюк к ней.` : `Теперь тяжёлая деталь — ${heavyName}. Беги к красному пульту крана!`);
       } else {
-        say(`Твой ход! Возьми ${what}.`);
+        say(craneMode ? `Краном пока ставить нечего. Выйди из крана и возьми на стеллаже ${what}.` : `Беги к стеллажу и возьми ${what}.`);
       }
     };
 
@@ -887,10 +1068,16 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       finished = true;
       busy = true;
       markBusy = true;
+      craneMode = false;
+      hookGoal = null;
       syncUi();
+      syncCraneUi();
+      setHolding(null);
       say("Ура! Мрия и «Буран» готовы к полёту!");
       const vd = playOn(mark, "Victory", true, 0.2);
       void dadCheer();
+      // Кран уезжает к стене, чтобы не мешать взлёту.
+      void craneSlide(CRANE_HOME.x, CRANE_HOME.z);
       await wait(Math.max(vd || 1.5, 2.2));
       // Отводим Марка в угол у стеллажа: самолёт будет разворачиваться.
       markBusy = false;
@@ -906,7 +1093,7 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       exhaust = buildExhaust();
       exhaust.visible = false;
       planeGroup.add(exhaust);
-      const line = "Отличная работа, экипаж! Капитан Папа сопровождает Мрию!";
+      const line = "Отличная работа, Марк! Ты всё собрал сам. Капитан Папа сопровождает Мрию!";
       say(line);
       if (dad) {
         dadBusy = true;
@@ -956,72 +1143,133 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
     scene.traverse((o) => {
       if (o.userData.button) buttonMeshes.push(o);
     });
-    const hit = (event: PointerEvent) => {
+    type Hit = { piece?: PieceId; slot?: SlotId; button?: boolean; floor?: THREE.Vector3 };
+    const hit = (event: PointerEvent): Hit | null => {
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(pointer, camera);
       const targets: THREE.Object3D[] = [...buttonMeshes];
       for (const piece of pieces.values()) {
         const inHands = piece === carried || (lifting !== null && piece === lifting.piece);
-        if (!Object.values(state.placed).includes(piece.id) && !inHands && piece !== craneLoad) targets.push(...piece.meshes);
+        if (!isPlaced(state, piece.id) && !inHands && piece !== craneLoad) targets.push(...piece.meshes);
       }
       for (const slot of slots.values()) if (slot.ghost.visible) slot.ghost.traverse((o) => (o as THREE.Mesh).isMesh && targets.push(o));
       const first = raycaster.intersectObjects(targets, false)[0];
-      if (first) return first.object.userData as { piece?: PieceId; slot?: SlotId; button?: boolean };
+      if (first) return first.object.userData as Hit;
       const p = new THREE.Vector3();
       if (raycaster.ray.intersectPlane(floor, p)) return { floor: p };
       return null;
     };
 
-    const onPointerDown = (event: PointerEvent) => {
-      if (finished || !started || markBusy) return;
-      const data = hit(event);
-      if (!data) return;
-      idleTimer = 0;
-      if ("floor" in data && data.floor) {
+    /** Нажатие, пока Марк у пульта: оно управляет краном. */
+    const tapCrane = (data: Hit) => {
+      if (hookBusy) return;
+      if (data.button) return;
+      if (data.piece) {
+        const piece = pieces.get(data.piece)!;
+        if (pieceInfo(data.piece).carrier === "hands") {
+          if (craneLoad) {
+            say("Сначала поставь деталь, которая на крюке.");
+            return;
+          }
+          // Лёгкая деталь: выходим из крана и бежим за ней.
+          exitCrane();
+          tapRun(data);
+          return;
+        }
+        if (craneLoad) {
+          say(`На крюке уже ${pieceInfo(craneLoad.id).name.toLowerCase()}. Сначала поставь её.`);
+          return;
+        }
+        const why = canTake(state, data.piece, "crane");
+        if (why) {
+          playMiss();
+          say(explain(why, data.piece));
+          dadPoint();
+          return;
+        }
+        hookGoal = { x: piece.pivot.position.x, z: piece.pivot.position.z, then: "grab" };
+        return;
+      }
+      if (data.slot && craneLoad) {
+        const slot = slots.get(data.slot)!;
+        hookGoal = { x: slot.pos.x, z: slot.pos.z, then: "drop" };
+        return;
+      }
+      if (data.floor) {
+        hookGoal = { x: data.floor.x, z: data.floor.z, then: null };
+        tapMarker(data.floor);
+      }
+    };
+
+    /** Нажатие, пока Марк бегает. */
+    const tapRun = (data: Hit) => {
+      if (data.floor) {
         goal = null;
         goTo(data.floor);
         tapMarker(data.floor);
         return;
       }
-      const d = data as { piece?: PieceId; slot?: SlotId; button?: boolean };
-      if (d.button) {
-        goal = { kind: "button" };
-        goTo(BUTTON.clone().add(new THREE.Vector3(0.1, 0, -0.62)));
+      if (data.button) {
+        goal = { kind: "console" };
+        goTo(CONSOLE_SPOT);
         return;
       }
-      if (d.piece) {
-        const piece = pieces.get(d.piece)!;
+      if (data.piece) {
+        const piece = pieces.get(data.piece)!;
+        if (pieceInfo(data.piece).carrier === "crane") {
+          if (isPlaced(state, data.piece)) return;
+          const why = canTake(state, data.piece, "crane");
+          if (why) {
+            playMiss();
+            say(explain(why, data.piece));
+            return;
+          }
+          // Тяжёлую — краном: Марк бежит к пульту.
+          say(`Это ${pieceInfo(data.piece).spoken}. Эту деталь ставят краном — бегу к пульту!`);
+          goal = { kind: "console" };
+          goTo(CONSOLE_SPOT);
+          return;
+        }
         if (carried) {
           say(`Руки заняты: Марк несёт ${pieceInfo(carried.id).spoken}. Сначала поставь её на самолёт.`);
           return;
         }
-        const why = canPick(state, d.piece);
-        if (why && why !== "turn") {
+        const why = canTake(state, data.piece, "hands");
+        if (why) {
           playMiss();
-          say(explain(why, d.piece));
+          say(explain(why, data.piece));
           return;
         }
         if (!piece.approach) return;
-        goal = { kind: "pick", piece: d.piece };
+        goal = { kind: "pick", piece: data.piece };
         goTo(piece.approach);
         return;
       }
-      if (d.slot) {
-        const slot = slots.get(d.slot)!;
+      if (data.slot) {
+        const slot = slots.get(data.slot)!;
         if (!slot.approach) return;
         if (!carried) {
           say("Сначала возьми деталь на стеллаже.");
           return;
         }
-        goal = { kind: "place", slot: d.slot };
+        goal = { kind: "place", slot: data.slot };
         refusedAt = null;
         goTo(slot.approach);
       }
     };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (finished || !started || busy) return;
+      const data = hit(event);
+      if (!data) return;
+      idleTimer = 0;
+      if (craneMode) tapCrane(data);
+      else if (!markBusy) tapRun(data);
+    };
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
 
-    // Отметка на полу, куда побежал Марк.
+    // Отметка на полу, куда побежал Марк или поедет крюк.
     const marker = new THREE.Mesh(
       new THREE.RingGeometry(0.16, 0.24, 32),
       new THREE.MeshBasicMaterial({ color: 0x2f6fe4, transparent: true, opacity: 0, depthWrite: false }),
@@ -1035,10 +1283,15 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       markerT = 0;
     };
 
-    // Клавиатура: стрелки и WASD.
+    // Клавиатура: стрелки и WASD; пробел — кнопка крана.
     const keys = new Set<string>();
     const onKey = (e: KeyboardEvent) => {
       const code = e.code;
+      if (code === "Space" && e.type === "keydown" && craneMode) {
+        e.preventDefault();
+        void craneAction();
+        return;
+      }
       if (!/^(Arrow(Up|Down|Left|Right)|Key[WASD])$/.test(code)) return;
       e.preventDefault();
       if (e.type === "keydown") keys.add(code);
@@ -1046,12 +1299,14 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
+    craneActionRef.current = () => void craneAction();
+    exitCraneRef.current = exitCrane;
 
     // ---------- для автотестов ----------
     if (process.env.NODE_ENV !== "production") {
       (window as unknown as { __mriya?: unknown }).__mriya = {
         state: () => state,
-        busy: () => busy || markBusy,
+        busy: () => busy || markBusy || hookBusy,
         mark: () => ({
           ...walker.pos,
           yaw: walker.yaw,
@@ -1063,63 +1318,51 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
           markBusy,
           busy,
         }),
-        tapPiece: (id: PieceId) => {
-          const piece = pieces.get(id)!;
-          if (piece.approach) {
-            goal = { kind: "pick", piece: id };
-            goTo(piece.approach);
-          }
+        crane: () => ({ ...craneState, mode: craneMode, load: craneLoad?.id ?? null, busy: hookBusy, goal: hookGoal }),
+        tapPiece: (id: PieceId) => (craneMode ? tapCrane({ piece: id }) : tapRun({ piece: id })),
+        tapSlot: (id: SlotId) => (craneMode ? tapCrane({ slot: id }) : tapRun({ slot: id })),
+        tapConsole: () => tapRun({ button: true }),
+        hookTo: (x: number, z: number) => {
+          hookGoal = { x, z, then: null };
         },
-        tapSlot: (id: SlotId) => {
-          const slot = slots.get(id)!;
-          if (slot.approach) {
-            goal = { kind: "place", slot: id };
-            refusedAt = null;
-            goTo(slot.approach);
-          }
-        },
-        tapButton: () => {
-          goal = { kind: "button" };
-          goTo(BUTTON.clone().add(new THREE.Vector3(0.1, 0, -0.62)));
-        },
+        craneAction: () => craneAction(),
+        exitCrane: () => exitCrane(),
         walkTo: (x: number, z: number) => {
           goal = null;
           goTo(new THREE.Vector3(x, 0, z));
         },
         answer: (n: number) => answerRef.current(n),
-        /** Мгновенно ставит детали по правилам, пока их не станет n, — для проверки картинки. */
-        fill: (n: number) => {
-          while (placedCount(state) < Math.min(n, 15)) {
-            const c = state.turn === "papa" ? papaChoice(state) : (() => {
-              const id = pickable(state)[0];
-              return id ? { piece: id, slot: openSlotsFor(state, id)[0]! } : null;
-            })();
-            if (!c) {
-              state = { ...state, turn: state.turn === "papa" ? "player" : "papa" };
-              continue;
-            }
-            const piece = pieces.get(c.piece)!;
-            piece.pivot.position.copy(slots.get(c.slot)!.pos);
-            piece.pivot.quaternion.identity();
-            piece.pivot.scale.setScalar(1);
-            piece.footprint = null;
-            state = place(state, state.turn, c.piece, c.slot).state;
-            for (const q of [questionDue(state)]) if (q) state = markAsked(state, q.id);
-          }
-          rebuildObstacles();
-          showGhosts();
-          syncUi();
-          if (state.turn === "papa") void papaTurn();
-          else playerTurn();
-        },
         asking: () => asking,
         clock: () => gameTime,
         step: (dt: number, n = 1) => {
           for (let i = 0; i < n; i++) frame(dt);
         },
-        pickable: () => pickable(state),
+        available: (by: "hands" | "crane") => available(state, by),
         camera: () => ({ pos: camera.position.toArray(), target: camTarget.toArray() }),
         open: (id: PieceId) => openSlotsFor(state, id),
+        slotPos: (id: SlotId) => slots.get(id)!.pos.toArray(),
+        bubble: () => lastSpoken.current,
+        /** Мгновенно ставит детали по правилам, пока их не станет n, — для проверки картинки. */
+        fill: (n: number) => {
+          while (placedCount(state) < Math.min(n, 15)) {
+            const id = [...available(state, "crane"), ...available(state, "hands")].find((x) => x !== "buran");
+            if (!id) break;
+            const slotId = openSlotsFor(state, id)[0]!;
+            const piece = pieces.get(id)!;
+            piece.pivot.position.copy(slots.get(slotId)!.pos);
+            piece.pivot.quaternion.identity();
+            piece.pivot.scale.setScalar(1);
+            piece.footprint = null;
+            state = place(state, id, slotId).state;
+            for (;;) {
+              const q = questionDue(state);
+              if (!q) break;
+              state = markAsked(state, q.id);
+            }
+          }
+          rebuildObstacles();
+          prompt();
+        },
       };
     }
 
@@ -1133,17 +1376,20 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       setPhase("play");
       started = true;
       walker = { ...walker, yaw: Math.atan2(0 - walker.pos.x, 2 - walker.pos.z) };
-      const hello = "Привет! Я Марк. Сегодня собираем самый большой самолёт в мире — Ан-225 «Мрия»!";
+      const hello = "Привет! Я Марк. Сегодня я сам соберу самый большой самолёт в мире — Ан-225 «Мрия»!";
       say(hello);
       const d = playOn(mark, "Wave", true, 0.2);
       await wait(Math.max(d, speechTime(hello)));
       playOn(mark, "Idle", false, 0.4);
-      const line = "А я Капитан Папа. Тяжёлые детали я ставлю краном, а лёгкие носит Марк. Ходим по очереди!";
+      const line =
+        "А я Капитан Папа, я подсказываю. Лёгкие детали Марк носит в руках, тяжёлые ставит краном. Начнём с фюзеляжа: беги к красному пульту!";
       say(line);
       const dw = playOn(dad, "Wave", true, 0.2);
       await wait(Math.max(dw, speechTime(line)));
-      playOn(dad, "Idle", false, 0.4);
-      await papaTurn();
+      playOn(dad, "Point", true, 0.3);
+      busy = false;
+      idleTimer = 0;
+      syncUi();
     };
     if (autoStart) void startRef.current();
 
@@ -1272,26 +1518,73 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       if (keys.has("ArrowUp") || keys.has("KeyW")) sy += 1;
       if (keys.has("ArrowDown") || keys.has("KeyS")) sy -= 1;
       const stickLen = Math.min(1, Math.hypot(sx, sy));
-      const stickOn = stickLen > 0.12 && started && !markBusy;
-      if (stickOn) {
-        goal = null;
-        idleTimer = 0;
+      const stickRaw = stickLen > 0.12 && started && !finished;
+      const sn = Math.hypot(sx, sy) || 1;
+      const stickX = ((camRight.x * sx + camFwd.x * sy) / sn) * stickLen;
+      const stickZ = ((camRight.z * sx + camFwd.z * sy) / sn) * stickLen;
+      // У пульта джойстик ведёт кран, а не Марка.
+      const stickOn = stickRaw && !markBusy && !craneMode;
+      if (stickRaw) idleTimer = 0;
+      if (stickOn) goal = null;
+
+      // ---------- кран ----------
+      if (craneMode && !hookBusy) {
+        let vx = 0;
+        let vz = 0;
+        if (stickRaw) {
+          hookGoal = null;
+          vx = stickX * CRANE_SPEED;
+          vz = stickZ * CRANE_SPEED;
+        } else if (hookGoal) {
+          const dx = hookGoal.x - craneState.x;
+          const dz = hookGoal.z - craneState.z;
+          const d = Math.hypot(dx, dz);
+          if (d < 0.03) {
+            const then = hookGoal.then;
+            hookGoal = null;
+            if (then) void craneAction();
+          } else {
+            const v = Math.min(CRANE_SPEED, d * 2.5 + 0.3);
+            vx = (dx / d) * v;
+            vz = (dz / d) * v;
+          }
+        }
+        // Кран тяжёлый: разгоняется и тормозит плавно, без рывков.
+        const k = Math.min(1, dt * 6);
+        craneState.vx += (vx - craneState.vx) * k;
+        craneState.vz += (vz - craneState.vz) * k;
+        craneState.x = THREE.MathUtils.clamp(craneState.x + craneState.vx * dt, CRANE_BOUNDS.minX, CRANE_BOUNDS.maxX);
+        craneState.z = THREE.MathUtils.clamp(craneState.z + craneState.vz * dt, CRANE_BOUNDS.minZ, CRANE_BOUNDS.maxZ);
+        const moving = Math.hypot(craneState.vx, craneState.vz) > 0.08;
+        // Подсказки Папы, пока деталь на крюке.
+        if (craneLoad && !busy) {
+          const target = targetFor(craneLoad);
+          const over = slotUnderHook(craneLoad);
+          if (over && refusal(state, craneLoad.id, over.id) === null && !moving && !overSaid) {
+            overSaid = true;
+            say("Ты прямо над местом! Жми «Поставить».");
+          }
+          if (!over) overSaid = false;
+          craneIdle = moving ? 0 : craneIdle + dt;
+          if (target && !over && craneIdle > 3.5) {
+            craneIdle = 0;
+            say(`Капитан Папа: ${directionTo(target.pos.x, target.pos.z)}`);
+            dadPoint();
+          }
+        }
+        syncCraneUi();
+      } else if (craneMode) {
+        craneState.vx = 0;
+        craneState.vz = 0;
       }
 
       if (mark) {
-        if (started && !markBusy) {
-          const n = Math.hypot(sx, sy) || 1;
-          const input = stickOn
-            ? {
-                kind: "stick" as const,
-                x: ((camRight.x * sx + camFwd.x * sy) / n) * stickLen,
-                z: ((camRight.z * sx + camFwd.z * sy) / n) * stickLen,
-              }
-            : { kind: "path" as const };
+        if (started && !markBusy && !craneMode) {
+          const input = stickOn ? { kind: "stick" as const, x: stickX, z: stickZ } : { kind: "path" as const };
           walker = stepWalker(walker, dt, input, carried !== null, obstacles, BOUNDS);
         }
         // Походка: клип по виду шага, темп — от реальной скорости.
-        const gait: Gait = markBusy ? lastGait ?? "idle" : walker.gait;
+        const gait: Gait = markBusy ? lastGait ?? "idle" : craneMode ? "idle" : walker.gait;
         if (!markBusy && gait !== lastGait) {
           playOn(mark, ACTION_FOR[gait], false, gait === "run" || lastGait === "run" ? 0.18 : 0.25);
           lastGait = gait;
@@ -1303,52 +1596,44 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         mark.mixer?.update(dt);
 
         // Цели: дошёл — делаем.
-        if (goal && !markBusy && arrived(walker)) {
+        if (goal && !markBusy && !busy && arrived(walker)) {
           const g = goal;
           goal = null;
-          if (g.kind === "pick") {
-            const piece = pieces.get(g.piece)!;
-            if (state.turn !== "player" || busy) say(explain("turn", g.piece));
-            else void pickUp(piece);
-          } else if (g.kind === "place") {
-            if (state.turn !== "player" || busy) say(explain("turn", carried?.id ?? "eng1"));
-            else void placeAt(slots.get(g.slot)!);
+          if (g.kind === "pick") void pickUp(pieces.get(g.piece)!);
+          else if (g.kind === "place") void placeAt(slots.get(g.slot)!);
+          else void enterCrane();
+        }
+        // Джойстиком подошли к детали, к месту или к пульту — действие само.
+        if (stickOn && !busy && !markBusy) {
+          if (!carried) {
+            for (const id of available(state, "hands")) {
+              const piece = pieces.get(id)!;
+              if (piece.approach && Math.hypot(piece.approach.x - walker.pos.x, piece.approach.z - walker.pos.z) < 0.4) {
+                void pickUp(piece);
+                break;
+              }
+            }
           } else {
-            if (state.turn === "player" && !busy && slotOpen(state, "buran")) void pressButton();
-            else say("Это кнопка крана. Её нажмём в конце, для «Бурана».");
+            const kind = pieceInfo(carried.id).kind;
+            let nearest: Slot | null = null;
+            let best = 0.45;
+            for (const slot of slots.values()) {
+              if (!slot.approach || slotInfo(slot.id).kind !== kind || isFilled(state, slot.id) || !slotOpen(state, slot.id)) continue;
+              const d = Math.hypot(slot.approach.x - walker.pos.x, slot.approach.z - walker.pos.z);
+              if (d < best) {
+                best = d;
+                nearest = slot;
+              }
+            }
+            if (nearest && nearest.id !== refusedAt) void placeAt(nearest);
+            if (!nearest && refusedAt) refusedAt = null;
+          }
+          if (Math.hypot(CONSOLE_SPOT.x - walker.pos.x, CONSOLE_SPOT.z - walker.pos.z) < 0.35 && !consoleRefused) {
+            consoleRefused = true;
+            void enterCrane();
           }
         }
-        // Джойстиком подошли к детали или к месту — действие само.
-        if (stickOn || (!goal && arrived(walker))) {
-          if (state.turn === "player" && !busy && !markBusy) {
-            if (!carried) {
-              for (const id of pickable(state)) {
-                const piece = pieces.get(id)!;
-                if (piece.approach && Math.hypot(piece.approach.x - walker.pos.x, piece.approach.z - walker.pos.z) < 0.4 && stickOn) {
-                  void pickUp(piece);
-                  break;
-                }
-              }
-            } else {
-              const kind = pieceInfo(carried.id).kind;
-              let nearest: Slot | null = null;
-              let best = 0.45;
-              for (const slot of slots.values()) {
-                if (!slot.approach || slotInfo(slot.id).kind !== kind || isFilled(state, slot.id) || !slotOpen(state, slot.id)) continue;
-                const d = Math.hypot(slot.approach.x - walker.pos.x, slot.approach.z - walker.pos.z);
-                if (d < best) {
-                  best = d;
-                  nearest = slot;
-                }
-              }
-              if (nearest && nearest.id !== refusedAt && stickOn) void placeAt(nearest);
-              if (!nearest && refusedAt) refusedAt = null;
-            }
-            if (slotOpen(state, "buran") && Math.hypot(BUTTON.x - walker.pos.x, BUTTON.z - walker.pos.z) < 0.75 && stickOn) {
-              void pressButton();
-            }
-          }
-        }
+        if (Math.hypot(CONSOLE_SPOT.x - walker.pos.x, CONSOLE_SPOT.z - walker.pos.z) > 0.9) consoleRefused = false;
 
         // Деталь в руках.
         if (lifting && mark.prop) {
@@ -1381,62 +1666,68 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
         dad.mixer?.update(dt);
       }
 
-      // Кран.
+      // Кран: мост, тележка, трос, крюк и груз.
       crane.bridge.position.x = craneState.x;
       crane.trolley.position.z = craneState.z;
       const cable = Math.max(0.05, CRANE_TOP - 0.2 - craneState.hook);
       crane.cable.scale.y = cable;
       crane.cable.position.y = CRANE_TOP - 0.2 - cable / 2;
       crane.hook.position.y = craneState.hook;
-      if (craneLoad) {
-        craneLoad.pivot.position.set(craneState.x, craneState.hook - (craneLoad.halfH * craneLoad.pivot.scale.x + 0.14), craneState.z);
-      }
+      if (craneLoad) craneLoad.pivot.position.set(craneState.x, craneState.hook - hangOf(craneLoad), craneState.z);
+      // Пятно под крюком: видно, куда он опустится.
+      hookSpot.visible = craneMode;
+      hookSpot.position.set(craneState.x, 0.014, craneState.z);
+      const lineTop = craneLoad ? craneState.hook - hangOf(craneLoad) - craneLoad.halfH : craneState.hook - 0.1;
+      dropLine.visible = craneMode && lineTop > 0.1;
+      dropLine.scale.y = Math.max(0.05, lineTop);
+      dropLine.position.set(craneState.x, lineTop / 2, craneState.z);
 
-      // Подсказки: доступные детали на стеллаже подпрыгивают и светятся.
-      const canAct = started && state.turn === "player" && !busy && !carried && !lifting;
-      for (const id of rackOrder) {
-        const piece = pieces.get(id)!;
-        if (Object.values(state.placed).includes(id) || piece === carried || piece === craneLoad || (lifting && lifting.piece === piece)) continue;
-        const ok = canAct && canPick(state, id) === null;
+      // Подсказки: доступные детали подпрыгивают и светятся.
+      const free = started && !busy && !lifting && !finished;
+      for (const piece of pieces.values()) {
+        if (isPlaced(state, piece.id) || piece === carried || piece === craneLoad || (lifting && lifting.piece === piece)) continue;
+        const heavy = pieceInfo(piece.id).carrier === "crane";
+        const ok = free && (heavy ? craneMode && !craneLoad : !craneMode && !carried) && canTake(state, piece.id, heavy ? "crane" : "hands") === null;
         setGlow(piece, ok);
-        piece.pivot.position.y = piece.home.y + (ok && !reducedMotion ? Math.max(0, Math.sin(time * 3 + piece.home.x)) * 0.05 : 0);
+        if (!heavy) piece.pivot.position.y = piece.home.y + (ok && !reducedMotion ? Math.max(0, Math.sin(time * 3 + piece.home.x)) * 0.05 : 0);
       }
       for (const slot of slots.values()) {
         if (!slot.ghost.visible) continue;
-        const glow = pulsing.has(slot.id) || craneTarget === slot.id;
+        const glow = pulsing.has(slot.id);
         const wave = 0.5 + 0.5 * Math.sin(time * (glow ? 6 : 2.5));
         slot.ghost.traverse((o) => {
           const m = (o as THREE.Mesh).material as THREE.MeshBasicMaterial | undefined;
           if (m && (o as THREE.Mesh).isMesh) m.opacity = glow ? 0.25 + 0.35 * wave : GHOST_OPACITY + 0.12 * wave;
         });
       }
-      buttonGlow(time, canAct && slotOpen(state, "buran"));
+      // Пульт мигает, когда есть что ставить краном, а Марк не у пульта.
+      buttonGlow(time, free && !craneMode && !carried && available(state, "crane").length > 0);
       if (markerT < 1) {
         markerT = Math.min(1, markerT + dt * 1.6);
         const m = marker.material as THREE.MeshBasicMaterial;
         m.opacity = 0.8 * (1 - markerT);
         marker.scale.setScalar(1 + markerT * 0.8);
       }
-      if (canAct) {
+      if (free) {
         idleTimer += dt;
         if (idleTimer > 16) {
           idleTimer = 0;
-          say(
-            slotOpen(state, "buran")
-              ? "Беги к красной кнопке крана слева."
-              : "Нажми на светящуюся деталь на стеллаже — Марк побежит за ней.",
-          );
-        }
-      } else if (carried && state.turn === "player" && !busy) {
-        idleTimer += dt;
-        if (idleTimer > 16) {
-          idleTimer = 0;
-          say("Нажми на прозрачную деталь на самолёте — Марк отнесёт туда свою.");
+          if (craneMode) {
+            if (craneLoad) say("Веди крюк к прозрачному месту на самолёте и жми «Поставить».");
+            else if (available(state, "crane").length) say("Нажми на светящуюся тяжёлую деталь — кран сам к ней поедет.");
+            else say("Нажми «Выйти из крана» и беги к стеллажу.");
+          } else if (carried) {
+            say("Нажми на прозрачную деталь на самолёте — Марк отнесёт туда свою.");
+          } else if (available(state, "crane").length && !available(state, "hands").length) {
+            say("Беги к красному пульту крана — он мигает.");
+          } else {
+            say("Нажми на светящуюся деталь на стеллаже — Марк побежит за ней.");
+          }
         }
       }
 
-      // Камера: мягко к тому, кто действует.
-      if (craneLoad || craneTarget) focus.set(craneState.x, 0, craneState.z);
+      // Камера: мягко к тому, что сейчас в руках у ребёнка — Марку или крюку.
+      if (craneMode) focus.set(craneState.x, 0, craneState.z);
       else focus.set(walker.pos.x, 0, walker.pos.z);
       const want = camBase.clone().addScaledVector(focus.sub(camBase), 0.5);
       const k = 1 - Math.exp(-dt * 2.2);
@@ -1502,8 +1793,8 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
             {placed} из {PIECE_COUNT}
           </span>
         </div>
-        <span className={`mriya-turn ${turn}`}>
-          {phase === "play" ? (turn === "player" ? "Твой ход" : "Ходит Папа") : "Ангар"}
+        <span className={`mriya-turn ${control}`}>
+          {phase === "play" ? (control === "crane" ? "Марк у крана" : "Марк бегает") : "Ангар"}
         </span>
       </header>
 
@@ -1535,6 +1826,22 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
 
       {phase === "play" && <Joystick stickRef={stickRef} />}
 
+      {phase === "play" && control === "crane" && craneUi && !question && (
+        <section className="mriya-crane" aria-label="Пульт крана">
+          <button
+            type="button"
+            className={`mriya-crane-go${craneUi.ready ? " ready" : ""}`}
+            disabled={craneUi.busy}
+            onClick={() => craneActionRef.current()}
+          >
+            <ArrowDownToLine /> {craneUi.label}
+          </button>
+          <button type="button" className="mriya-crane-exit" disabled={craneUi.busy} onClick={() => exitCraneRef.current()}>
+            <LogOut /> Выйти из крана
+          </button>
+        </section>
+      )}
+
       {question && (
         <section className="mriya-question" role="dialog" aria-label="Вопрос на счёт">
           <p>{question.text}</p>
@@ -1554,8 +1861,8 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
           <h1>Собери «Мрию» вместе с Марком</h1>
           <p>
             Самый большой самолёт в мире: шесть двигателей, двойной хвост и космический корабль
-            на спине. Ты водишь Марка — он бегает и носит детали. Тяжёлые детали ставит краном
-            Капитан Папа.
+            на спине. Ты водишь Марка и собираешь всё сам: лёгкие детали носишь в руках,
+            тяжёлые ставишь краном. Капитан Папа подсказывает.
           </p>
           <Button size="lg" disabled={phase === "loading"} onClick={() => startRef.current()}>
             {phase === "loading" ? "Марк бежит в ангар…" : "Начать"}
@@ -1566,7 +1873,7 @@ function MriyaRound({ onExit, onWin, rewardAvailable: rewardProp, autoStart, onR
       {phase === "done" && (
         <section className="mriya-card">
           <span className="mriya-eyebrow">МРИЯ СОБРАНА</span>
-          <h1>Вы с Марком и Папой собрали «Мрию»!</h1>
+          <h1>Марк сам собрал «Мрию»!</h1>
           {rewardAvailable && (
             <p className="mriya-reward">
               <Star /> +3 звезды
