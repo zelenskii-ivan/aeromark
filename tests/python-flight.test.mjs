@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execute } from "../lib/python/interpreter.ts";
 import { simulate } from "../lib/python/flight.ts";
-import { assemble, COURSE, grantMission, isUnlocked, missionKey, MISSIONS } from "../content/python/missions.ts";
+import { assemble, COURSE, grantMission, isUnlocked, missionKey, MISSIONS, programBadgeEarned } from "../content/python/missions.ts";
 import { migrateProgress } from "../lib/progress.ts";
 
 function run(source) {
@@ -62,25 +62,37 @@ test("limits bound source, syntax, range, execution and output with a retry afte
   assert.equal(execute("print(1)").ok, true);
 });
 
-test("all eight missions have working solutions and final flights require a fuel guard", () => {
-  const sources = [
-    assemble(MISSIONS[0], ["Готов к взлёту!"]),
-    assemble(MISSIONS[1], ["3", "2"]),
-    assemble(MISSIONS[2], ["0"]),
-    assemble(MISSIONS[3], ["right", "3", 'move("up", 2)']),
-    assemble(MISSIONS[4], ["3", 'move("up", 1)']),
-    ...[[1, 4, 1], [2, 5, 2], [4, 6, 2]].map(([up, right, down]) =>
-      `fuel = 5\nif fuel > 0:\n    takeoff()\n    move("up", ${up})\n    move("right", ${right})\n    move("down", ${down})\n    land()`),
-  ];
+test("all thirteen missions have working solutions and final flights require a fuel guard", () => {
+  const solutions = new Map([
+    ["radio", ["Готов к взлёту!"]],
+    ["radio-order", ["Старт!", "Взлёт!"]],
+    ["radio-count", ["print(1)"]],
+    ["radio-space", ["Взлёт разрешён"]],
+    ["radio-quotes", ['"Полоса свободна"']],
+    ["radio-repair", ['print("Курс 2")']],
+    ["settings", ["3", "2"]],
+    ["fuel", ["0"]],
+    ["map", ["right", "3", 'move("up", 2)']],
+    ["loop", ["3", 'move("up", 1)']],
+  ]);
+  const routes = { solo: [1, 4, 1], storm: [2, 5, 2], captain: [4, 6, 2] };
   assert.equal(COURSE.length, 6);
-  assert.equal(sources.length, MISSIONS.length);
-  MISSIONS.forEach((mission, index) => {
-    const source = sources[index];
+  assert.equal(COURSE[0].missions.length, 6);
+  assert.equal(MISSIONS.length, 13);
+  for (const mission of MISSIONS) {
+    const values = solutions.get(mission.id);
+    let source;
+    if (values) {
+      source = assemble(mission, values);
+    } else {
+      const [up, right, down] = routes[mission.id];
+      source = `fuel = 5\nif fuel > 0:\n    takeoff()\n    move("up", ${up})\n    move("right", ${right})\n    move("down", ${down})\n    land()`;
+    }
     const flight = simulate(mission.map, run(source));
     assert.equal(flight.problem, "", mission.id);
     assert.equal(mission.passes(flight, source), true, mission.id);
-  });
-  const mission = MISSIONS[5];
+  }
+  const mission = MISSIONS.find(item => item.id === "solo");
   const unguarded = 'fuel = 5\nif fuel > 0:\n    print("OK")\ntakeoff()\nmove("up", 1)\nmove("right", 4)\nmove("down", 1)\nland()';
   assert.equal(simulate(mission.map, run(unguarded)).landed, true);
   assert.equal(mission.passes(simulate(mission.map, run(unguarded)), unguarded), false);
@@ -96,4 +108,21 @@ test("shared profile serialization keeps Python rewards and prevents premature o
   assert.equal(isUnlocked(stored.gameWins, "settings"), true);
   assert.equal(isUnlocked(stored.gameWins, "fuel"), false);
   assert.equal(grantMission(stored, "radio"), stored);
+});
+
+test("practice opens after radio and preserves previously earned levels and badge", () => {
+  const wins = ["radio", "settings", "fuel", "map", "loop", "solo", "storm", "captain"].map(missionKey);
+  const practice = COURSE[0].missions.slice(1);
+  for (const mission of practice) {
+    assert.equal(isUnlocked([], mission.id), false);
+    assert.equal(isUnlocked([missionKey("radio")], mission.id), true);
+    const original = assemble(mission, mission.slots.map(slot => slot.initial));
+    const result = execute(original);
+    if (result.ok) assert.equal(mission.passes(simulate(mission.map, result.commands), original), false);
+  }
+  assert.equal(isUnlocked([missionKey("radio")], "settings"), true);
+  assert.equal(programBadgeEarned(wins), true);
+  const mission = practice[0];
+  const wrongOrder = 'print("Взлёт!")\nprint("Старт!")';
+  assert.equal(mission.passes(simulate(mission.map, run(wrongOrder)), wrongOrder), false);
 });

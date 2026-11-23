@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { play, stopAudio } from "@/lib/academy/audio";
 import { execute } from "@/lib/python/interpreter";
 import { simulate, type Flight } from "@/lib/python/flight";
-import { assemble, COURSE, isUnlocked, missionKey, MISSIONS, type Mission } from "@/content/python/missions";
+import { assemble, COURSE, isUnlocked, missionKey, MISSIONS, programBadgeEarned, type Mission } from "@/content/python/missions";
 import { FlightMap } from "./FlightMap";
 import "./python.css";
 
@@ -40,7 +40,7 @@ export default function PythonAcademy({ wins, onComplete, onExit }: Props) {
         <div className="py-progress">
           <span><Star /> {completed} из {MISSIONS.length} миссий</span>
           <progress value={completed} max={MISSIONS.length} aria-label="Пройдено миссий" />
-          {completed === MISSIONS.length && <strong>Достижение «Пилот-программист»</strong>}
+          {programBadgeEarned(wins) && <strong>Достижение «Пилот-программист»</strong>}
         </div>
       </header>
       <nav className="py-course" aria-label="Этапы курса">
@@ -130,7 +130,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
   }
   function showPlayback() {
     if (!window.matchMedia("(max-width: 700px)").matches) return;
-    const target = mission.id === "radio" ? terminal.current : mapColumn.current;
+    const target = COURSE[0]?.missions.includes(mission) ? terminal.current : mapColumn.current;
     target?.scrollIntoView({ block: "start" });
   }
   function run() {

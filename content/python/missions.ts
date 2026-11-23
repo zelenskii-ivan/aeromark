@@ -27,7 +27,7 @@ const finish = (flight: Flight, source: string) => {
   return dryRun.ok && !dryRun.commands.some((command) => command.kind === "takeoff");
 };
 
-export const MISSIONS: readonly Mission[] = [
+const CORE_MISSIONS: readonly Mission[] = [
   {
     id: "radio", title: "Радиосвязь", mode: "values",
     instruction: "Передай в эфир «Готов к взлёту!»",
@@ -101,13 +101,82 @@ export const MISSIONS: readonly Mission[] = [
   })),
 ];
 
+function printMission(
+  lesson: Omit<Mission, "map" | "passes">,
+  ...expected: string[]
+): Mission {
+  return {
+    ...lesson,
+    map: where([0, 0]),
+    passes: ({ output }) => output.length === expected.length && expected.every((line, index) => output[index] === line),
+  };
+}
+
+const PRINT_PRACTICE = [
+  printMission({
+    id: "radio-order", title: "Два сигнала", mode: "values",
+    instruction: "Сначала передай «Старт!», потом «Взлёт!».",
+    speech: "Сначала предскажи, какая команда сработает первой. Потом расставь два сигнала по порядку.",
+    hint: "Питон читает эти строки сверху вниз.",
+    parts: ['print("', '")\nprint("', '")'],
+    slots: [slots("Первая строка", "Взлёт!", "Старт!", "Взлёт!"), slots("Вторая строка", "Старт!", "Старт!", "Взлёт!")],
+    predict: question("Что напечатает исходный код первым?", ["Старт!", "Взлёт!"], 1),
+    explain: question("Почему порядок сообщений поменялся?", ["Изменили фразы в строках", "Терминал сам их переставил"], 0),
+  }, "Старт!", "Взлёт!"),
+  printMission({
+    id: "radio-count", title: "Считаем команды", mode: "complete",
+    instruction: "Добавь одну команду. Пусть терминал покажет 3, 2 и 1.",
+    speech: "Посчитай команды принт в примере. Потом добавь третью команду для числа один.",
+    hint: "Для последнего числа подойдёт print(1).",
+    parts: ["print(3)\nprint(2)\n", ""], slots: [slots("Последняя команда", "# Добавь команду", "print(1)", "print(2)", "print(3)")],
+    predict: question("Сколько строк напечатает пример?", ["Три", "Две"], 1),
+    explain: question("Почему теперь строк три?", ["Запустили три команды print", "Число 3 создало три строки"], 0),
+  }, "3", "2", "1"),
+  printMission({
+    id: "radio-space", title: "Пропавший пробел", mode: "values",
+    instruction: "Передай «Взлёт разрешён». Добавь пробел между словами.",
+    speech: "В примере два слова слиплись. Предскажи, что появится на экране, и добавь пробел.",
+    hint: "Команда print сохраняет пробелы внутри кавычек.",
+    parts: ['print("', '")'],
+    slots: [slots("Фраза", "Взлётразрешён", "Взлётразрешён", "Взлёт разрешён", "Взлёт! разрешён")],
+    predict: question("Что напечатает исходный код?", ["Взлёт разрешён", "Взлётразрешён"], 1),
+    explain: question("Откуда взялся пробел?", ["Терминал добавил его сам", "Он уже был в выбранной фразе"], 1),
+  }, "Взлёт разрешён"),
+  printMission({
+    id: "radio-quotes", title: "Кавычки для слов", mode: "complete",
+    instruction: "Почини код. Терминал должен показать «Полоса свободна».",
+    speech: "Слова в команде принт пишем в кавычках. Найди вариант с двумя кавычками.",
+    hint: "Одна кавычка перед словами, другая после.",
+    parts: ["print(", ")"],
+    slots: [slots("Внутри скобок", "Полоса свободна", "Полоса свободна", '"Полоса свободна', '"Полоса свободна"')],
+    predict: question("Что случится с кодом без кавычек?", ["Появится ошибка", "Появится фраза"], 0),
+    explain: question("Что показал терминал?", ['"Полоса свободна"', "Полоса свободна"], 1),
+  }, "Полоса свободна"),
+  printMission({
+    id: "radio-repair", title: "Точный позывной", mode: "complete",
+    instruction: "Оставь первую и третью строки. Во второй напечатай «Курс 2».",
+    speech: "Команда принт во второй строке выводит неверный курс. Исправь только её.",
+    hint: "Прочитай вторую строку. В ней должно быть число два внутри кавычек.",
+    parts: ['print("Маяк")\n', '\nprint("Конец связи")'],
+    slots: [slots("Вторая команда", 'print("Курс 5")')],
+    predict: question("Какая строка сейчас передаёт «Курс 5»?", ["Третья", "Вторая"], 1),
+    explain: question("Почему «Конец связи» остался в эфире?", ["Третья команда не изменилась", "Терминал запомнил её с прошлого запуска"], 0),
+  }, "Маяк", "Курс 2", "Конец связи"),
+];
+
+export const MISSIONS = [CORE_MISSIONS[0]!, ...PRINT_PRACTICE, ...CORE_MISSIONS.slice(1)];
+
+export function programBadgeEarned(wins: readonly string[]) {
+  return CORE_MISSIONS.every(mission => wins.includes(missionKey(mission.id)));
+}
+
 export const COURSE = [
-  { name: "Первые команды", missions: MISSIONS.slice(0, 1) },
-  { name: "Переменные", missions: MISSIONS.slice(1, 2) },
-  { name: "Условия if / else", missions: MISSIONS.slice(2, 3) },
-  { name: "Координаты", missions: MISSIONS.slice(3, 4) },
-  { name: "Циклы", missions: MISSIONS.slice(4, 5) },
-  { name: "Самостоятельный полёт", missions: MISSIONS.slice(5) },
+  { name: "Первые команды", missions: [CORE_MISSIONS[0]!, ...PRINT_PRACTICE] },
+  { name: "Переменные", missions: CORE_MISSIONS.slice(1, 2) },
+  { name: "Условия if / else", missions: CORE_MISSIONS.slice(2, 3) },
+  { name: "Координаты", missions: CORE_MISSIONS.slice(3, 4) },
+  { name: "Циклы", missions: CORE_MISSIONS.slice(4, 5) },
+  { name: "Самостоятельный полёт", missions: CORE_MISSIONS.slice(5) },
 ];
 
 export const missionKey = (id: string) => `python-flight:${id}`;
@@ -117,8 +186,9 @@ export function assemble(mission: Mission, values: readonly string[]) {
 }
 
 export function isUnlocked(wins: readonly string[], id: string) {
-  const index = MISSIONS.findIndex((mission) => mission.id === id);
-  return index >= 0 && (index === 0 || wins.includes(missionKey(MISSIONS[index - 1]!.id)));
+  if (PRINT_PRACTICE.some(mission => mission.id === id)) return wins.includes(missionKey("radio"));
+  const index = CORE_MISSIONS.findIndex(mission => mission.id === id);
+  return index >= 0 && (index === 0 || wins.includes(missionKey(CORE_MISSIONS[index - 1]!.id)));
 }
 
 export function grantMission<T extends { gameWins: string[]; stars: number }>(progress: T, id: string): T {
