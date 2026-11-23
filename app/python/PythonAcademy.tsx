@@ -102,6 +102,10 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
     setFeedback("");
     setExplained(false);
   }
+  function updateValue(index: number, value: string) {
+    clearRun();
+    setValues(current => current.map((item, i) => i === index ? value : item));
+  }
   function reset() {
     clearRun();
     setValues(mission.slots.map(slot => slot.initial));
@@ -200,23 +204,30 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
           </section>}
           <section className="py-panel py-editor">
             <h2><Code2 /> {editorLabels[mission.mode]}</h2>
-            {mission.mode === "free" ? (
+            {!predicted ? <p>Сначала ответь на вопрос «Предскажи». Потом сможешь изменить код.</p> : mission.mode === "free" ? (
               <div className="py-field">
                 <label htmlFor="py-source">Код Python</label>
-                <textarea id="py-source" value={code} disabled={!predicted} maxLength={2000} rows={8} spellCheck={false} autoCapitalize="off" onKeyDown={keepIndent}
+                <textarea id="py-source" value={code} maxLength={2000} rows={8} spellCheck={false} autoCapitalize="off" onKeyDown={keepIndent}
                   onChange={event => { clearRun(); setCode(event.target.value); }} />
               </div>
             ) : mission.slots.map((slot, index) => (
-              <div className="py-field" key={slot.label}>
-                <label htmlFor={`py-slot-${index}`}>{slot.label}</label>
-                {slot.choices?.length ? <select id={`py-slot-${index}`} value={values[index]} disabled={!predicted} onChange={event => {
-                  clearRun(); setValues(current => current.map((value, i) => i === index ? event.target.value : value));
-                }}>
-                  {!slot.initial && <option value="">Выбери</option>}
-                  {slot.choices.map(choice => <option key={choice}>{choice}</option>)}
-                </select> : <input id={`py-slot-${index}`} value={values[index]} disabled={!predicted} maxLength={100} spellCheck={false} autoCapitalize="off"
-                  onChange={event => { clearRun(); setValues(current => current.map((value, i) => i === index ? event.target.value : value)); }} />}
-              </div>
+              slot.choices?.length ? (
+                <fieldset className="py-field" key={slot.label}>
+                  <legend>{slot.label}</legend>
+                  <div className="py-buttons py-choices">
+                    {slot.choices.map(choice => (
+                      <Button key={choice} variant="outline" aria-pressed={choice === values[index]}
+                        onClick={() => updateValue(index, choice)}>{choice}</Button>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : (
+                <div className="py-field" key={slot.label}>
+                  <label htmlFor={`py-slot-${index}`}>{slot.label}</label>
+                  <input id={`py-slot-${index}`} value={values[index]} maxLength={100} spellCheck={false} autoCapitalize="off"
+                    onChange={event => updateValue(index, event.target.value)} />
+                </div>
+              )
             ))}
             <pre className="py-code" aria-label="Программа">{preview(mission, source, values).map((line, index) => (
               <span key={index} data-active={index + 1 === activeLine} aria-current={index + 1 === activeLine ? "true" : undefined}>
@@ -224,11 +235,11 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
               </span>
             ))}</pre>
             <p>Учебный Python. move(), takeoff() и land() — команды AeroMark.</p>
-            <div className="py-buttons">
-              <Button disabled={!predicted} onClick={run}><Play /> {playing ? "Запустить заново" : "Запустить"}</Button>
+            {predicted && <div className="py-buttons">
+              <Button onClick={run}><Play /> {playing ? "Запустить заново" : "Запустить"}</Button>
               {flight && <Button variant="outline" onClick={() => { setCursor(-1); showPlayback(); }}><RotateCcw /> Повторить анимацию</Button>}
               <Button variant="outline" onClick={reset}><RotateCcw /> Вернуть пример</Button>
-            </div>
+            </div>}
             {result && !playing && <p className="py-feedback" role="status">{result}</p>}
           </section>
           {valid && !playing && !explained && <section className="py-panel">

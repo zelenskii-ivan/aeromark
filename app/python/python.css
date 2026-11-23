@@ -64,11 +64,14 @@
 .py-brief summary { width: fit-content; cursor: pointer; color: var(--py-accent); font-weight: 700; }
 .py-brief details p { margin-top: 6px; }
 .py-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
-.py-academy button, .py-editor select, .py-editor input { min-height: 44px; }
+.py-academy button, .py-editor input { min-height: 44px; }
 .py-buttons button { max-width: 100%; white-space: normal; height: auto; text-align: left; }
 .py-field { display: grid; gap: 4px; }
-.py-field label { font-weight: 650; }
-.py-editor input, .py-editor textarea, .py-editor select { width: 100%; border: 1px solid #6f9aa8; border-radius: 8px; background: #f1fbfa; color: var(--py-ink); padding: 8px; font-size: 1rem; }
+.py-field label, .py-field legend { font-weight: 650; }
+fieldset.py-field { min-width: 0; padding: 0; border: 0; }
+.py-field legend { padding: 0 0 6px; }
+.py-choices button[aria-pressed="true"] { color: #124b41; background: #daf4ec; border-color: #0b675b; }
+.py-editor input, .py-editor textarea { width: 100%; border: 1px solid #6f9aa8; border-radius: 8px; background: #f1fbfa; color: var(--py-ink); padding: 8px; font-size: 1rem; }
 .py-editor textarea { font-family: monospace; resize: vertical; tab-size: 4; }
 .py-code, .py-terminal pre { margin: 0; padding: 9px; color: #f3faff; background: #142e45; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .88rem; }
 .py-code > span { display: block; min-height: 1.45em; }
