@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { play } from "@/lib/academy/audio";
 import { execute } from "@/lib/python/interpreter";
 import { simulate, type Flight, type MapSpec } from "@/lib/python/flight";
+import { ActionDock } from "./ActionDock";
 import { FlightMap } from "./FlightMap";
 
 const map: MapSpec = { start: [0, 0], goal: [5, 2], obstacles: [[2, 0], [2, 1]] };
@@ -78,8 +79,6 @@ export function FreeFlight() {
             onChange={event => update(event.target.value)} />
         </div>
         <div className="py-buttons">
-          <Button onClick={() => start(true)} disabled={!code.trim()}><Play /> Запустить маршрут</Button>
-          <Button variant="outline" onClick={() => start(false)} disabled={!code.trim()}><ArrowRight /> По шагам</Button>
           <Button variant="outline" onClick={() => update(code.trimEnd().split("\n").slice(0, -1).join("\n"))}
             disabled={!code}><Undo2 /> Убрать последнюю строку</Button>
           <Button variant="outline" onClick={() => update(example)}>Попробовать пример</Button>
@@ -93,13 +92,17 @@ export function FreeFlight() {
           <h2>Ход программы</h2>
           {frame && <code>Строка {frame.line} · {code.split("\n")[frame.line - 1]?.trim()}</code>}
           {transmissions.length > 0 && <pre aria-label="Сообщения">{transmissions.join("\n")}</pre>}
-          {finished ? <p role="status">{flight.problem || (flight.arrived ? "Аэродром достигнут!" : "Маршрут завершён.")}</p> :
-            <div className="py-buttons">
-              {playing ? <Button variant="outline" onClick={() => setPlaying(false)}>Пауза</Button> :
-                <Button onClick={() => setCursor(current => current + 1)}>Следующий шаг</Button>}
-            </div>}
+          {finished && <p role="status">{flight.problem || (flight.arrived ? "Аэродром достигнут!" : "Маршрут завершён.")}</p>}
         </section>}
       </div>
     </div>
+    <ActionDock>
+      <div className="py-buttons py-dock-actions">
+        <Button onClick={() => start(true)} disabled={!code.trim()}><Play /> Запустить маршрут</Button>
+        {!flight || finished ? <Button variant="outline" onClick={() => start(false)} disabled={!code.trim()}><ArrowRight /> По шагам</Button> :
+          playing ? <Button variant="outline" onClick={() => setPlaying(false)}>Пауза</Button> :
+            <Button variant="outline" onClick={() => setCursor(current => current + 1)}><ArrowRight /> Следующий шаг</Button>}
+      </div>
+    </ActionDock>
   </section>;
 }

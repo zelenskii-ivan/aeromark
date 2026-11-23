@@ -80,7 +80,6 @@ fieldset.py-field { min-width: 0; padding: 0; border: 0; }
 .py-code > span[data-active="true"] { background: #315373; outline: 1px solid #a7ddf5; }
 .py-terminal code { overflow-wrap: anywhere; }
 .py-panel .py-feedback { color: #81421e; }
-.py-success { background: #e8fbf3; border-color: #9ad9c0; }
 @media (max-width: 700px) {
   .py-course { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .py-course section:last-child { grid-column: 1 / -1; }
@@ -100,9 +99,31 @@ fieldset.py-field { min-width: 0; padding: 0; border: 0; }
 @media (max-width: 700px) {
   .py-lesson > .py-stack { display: contents; }
   .py-lesson .py-brief { order: 0; }
-  .py-lesson .py-prediction { order: 1; }
   .py-lesson .py-editor { order: 2; }
   .py-lesson .py-lesson-map { order: 3; scroll-margin-top: 10px; }
   .py-lesson .py-terminal { order: 4; }
-  .py-lesson .py-explanation, .py-lesson .py-success { order: 5; }
+}
+.py-dock {
+  position: fixed;
+  z-index: 30;
+  inset: auto 0 0;
+  max-height: 44dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: #f5fbff;
+  border-top: 1px solid var(--py-line);
+  box-shadow: 0 -3px 14px #122f4614;
+}
+.py-dock-inner { max-width: 1112px; margin: auto; display: grid; gap: 6px; }
+.py-dock-question { display: grid; gap: 6px; }
+.py-dock-question .py-map-heading { flex-wrap: nowrap; }
+.py-dock-success { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.py-dock-success svg { display: inline-block; width: 18px; vertical-align: middle; }
+.py-dock .py-feedback { color: #81421e; }
+.py-editor { scroll-margin-top: 10px; }
+.py-editor :is(input, textarea, button) { scroll-margin-bottom: min(210px, 32dvh); }
+@media (max-width: 700px) {
+  .py-dock-actions button { flex: 1 1 auto; }
+  .py-dock-question .py-buttons button { flex: 1 1 auto; }
 }

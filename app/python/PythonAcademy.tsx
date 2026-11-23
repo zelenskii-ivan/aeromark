@@ -7,6 +7,7 @@ import { play, stopAudio } from "@/lib/academy/audio";
 import { execute } from "@/lib/python/interpreter";
 import { simulate, type Flight } from "@/lib/python/flight";
 import { assemble, COURSE, isUnlocked, missionKey, MISSIONS, programBadgeEarned, type Mission } from "@/content/python/missions";
+import { ActionDock } from "./ActionDock";
 import { FreeFlight } from "./FreeFlight";
 import { FlightMap } from "./FlightMap";
 import "./python.css";
@@ -112,10 +113,12 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
   const [explained, setExplained] = useState(false);
   const mapRegion = useRef<HTMLDivElement>(null);
   const terminal = useRef<HTMLElement>(null);
+  const editor = useRef<HTMLElement>(null);
   const source = mission.mode === "free" ? code : assemble(mission, values);
   const frames = flight?.frames;
   const playing = !!frames && cursor + 1 < frames.length;
   const valid = !!flight && !flight.problem && !result;
+  const explaining = valid && !playing && !explained;
   const phase = !predicted ? 0 : playing ? 2 : explained ? 4 : valid ? 3 : 1;
 
   useEffect(() => {
@@ -224,19 +227,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
           </section>
         </div>
         <div className="py-stack">
-          {!predicted && <section className="py-panel py-prediction">
-            <div className="py-map-heading"><h2>{mission.predict.prompt}</h2>
-              <Button variant="outline" aria-label="Послушать вопрос" onClick={() => void play([mission.predict.prompt, ...mission.predict.choices].join(". "))}><Volume2 /></Button>
-            </div>
-            <div className="py-buttons">{mission.predict.choices.map((choice, index) => (
-              <Button key={choice} variant="outline" onClick={() => {
-                if (index === mission.predict.correct) { setPredicted(true); setFeedback(""); }
-                else setFeedback("Подумай ещё. Можно послушать задание или открыть подсказку.");
-              }}>{choice}</Button>
-            ))}</div>
-            <p role="status">{feedback}</p>
-          </section>}
-          <section className="py-panel py-editor">
+          <section className="py-panel py-editor" ref={editor}>
             <h2><Code2 /> {editorLabels[mission.mode]}</h2>
             {!predicted ? <p>Сначала ответь на вопрос «Предскажи». Потом сможешь изменить код.</p> : mission.mode === "free" ? (
               <div className="py-field">
@@ -269,29 +260,53 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
               </span>
             ))}</pre>
             <p>Учебный Python. move(), takeoff() и land() — команды AeroMark.</p>
-            {predicted && <div className="py-buttons">
-              <Button onClick={run}><Play /> {playing ? "Запустить заново" : "Запустить"}</Button>
-              {flight && <Button variant="outline" onClick={() => { setCursor(-1); showPlayback(); }}><RotateCcw /> Повторить анимацию</Button>}
-              <Button variant="outline" onClick={reset}><RotateCcw /> Вернуть пример</Button>
-            </div>}
-            {result && !playing && <p className="py-feedback" role="status">{result}</p>}
           </section>
-          {valid && !playing && !explained && <section className="py-panel py-explanation">
-            <div className="py-map-heading"><h2>{mission.explain.prompt}</h2>
+        </div>
+      </div>
+      <ActionDock>
+        {!predicted ? (
+          <section className="py-dock-question">
+            <div className="py-map-heading">
+              <h2>{mission.predict.prompt}</h2>
+              <Button variant="outline" aria-label="Послушать вопрос" onClick={() => void play([mission.predict.prompt, ...mission.predict.choices].join(". "))}><Volume2 /></Button>
+            </div>
+            <div className="py-buttons">{mission.predict.choices.map((choice, index) => (
+              <Button key={choice} variant="outline" onClick={() => {
+                if (index === mission.predict.correct) {
+                  setPredicted(true);
+                  setFeedback("");
+                  if (window.matchMedia("(max-width: 700px)").matches) {
+                    window.requestAnimationFrame(() => editor.current?.scrollIntoView({ block: "start" }));
+                  }
+                } else setFeedback("Подумай ещё. Можно послушать задание или открыть подсказку.");
+              }}>{choice}</Button>
+            ))}</div>
+          </section>
+        ) : explained && !playing ? (
+          <div className="py-dock-success">
+            <h2><Star /> Миссия выполнена{award && " · +1 звезда"}</h2>
+            {onNext && <Button onClick={onNext}>Следующая миссия</Button>}
+          </div>
+        ) : explaining ? (
+          <section className="py-dock-question">
+            <div className="py-map-heading">
+              <h2>{mission.explain.prompt}</h2>
               <Button variant="outline" aria-label="Послушать вопрос" onClick={() => void play([mission.explain.prompt, ...mission.explain.choices].join(". "))}><Volume2 /></Button>
             </div>
             <div className="py-buttons">{mission.explain.choices.map((choice, index) => (
               <Button key={choice} variant="outline" onClick={() => explain(index)}>{choice}</Button>
             ))}</div>
-            <p role="status">{feedback}</p>
-          </section>}
-          {explained && !playing && <section className="py-panel py-success">
-            <h2><Star /> Миссия выполнена{award && " · +1 звезда"}</h2>
-            <p>Ты объяснил, как сработала программа.</p>
-            {onNext && <Button onClick={onNext}>Следующая миссия</Button>}
-          </section>}
-        </div>
-      </div>
+          </section>
+        ) : null}
+        {feedback && <p role="status">{feedback}</p>}
+        {result && !playing && <p className="py-feedback" role="status">{result}</p>}
+        {predicted && <div className="py-buttons py-dock-actions">
+          {!explained && !explaining && <Button onClick={run}><Play /> {playing ? "Запустить заново" : "Запустить"}</Button>}
+          {flight && <Button variant="outline" onClick={() => { setCursor(-1); showPlayback(); }}><RotateCcw /> Повторить анимацию</Button>}
+          <Button variant="outline" onClick={() => editor.current?.scrollIntoView({ block: "start" })}>К коду</Button>
+          {!explaining && <Button variant="outline" onClick={reset}>Вернуть пример</Button>}
+        </div>}
+      </ActionDock>
     </>
   );
 }
