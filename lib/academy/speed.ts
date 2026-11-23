@@ -68,3 +68,28 @@ export function recordSpeedRun(academy: Academy, run: SpeedRun): SpeedOutcome {
 /** Разбивает текст на предложения — для вопросов «где это написано». */
 export const sentencesOf = (text: string): string[] =>
   text.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [text];
+
+/** Keeps punctuation in the displayed reading without counting stand-alone marks as words. */
+export function wordsForSpeedTest(text: string): string[] {
+  const words: string[] = [];
+  let prefix = "";
+  for (const part of text.trim().split(/\s+/)) {
+    if (/[\p{L}\p{N}]/u.test(part)) {
+      words.push(prefix ? prefix + part : part);
+      prefix = "";
+    } else if (part) {
+      prefix += part + " ";
+    }
+  }
+  if (prefix && words.length) words[words.length - 1] += " " + prefix.trimEnd();
+  return words;
+}
+
+/** An answer counts only once the child has read its supporting sentence. */
+export function questionsWithinReading<T extends { evidence: number }>(
+  text: { text: string; questions: readonly T[] }, readWords: number,
+): T[] {
+  let words = 0;
+  const ends = sentencesOf(text.text).map(sentence => (words += wordsForSpeedTest(sentence).length));
+  return text.questions.filter(question => ends[question.evidence] !== undefined && ends[question.evidence]! <= readWords);
+}

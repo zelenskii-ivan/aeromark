@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { BookOpen, ChevronLeft, ChevronRight, Flag, Gauge, Play, Square } from "lucide-react";
-import { FLIGHT_TEXTS, countWords, type FlightText } from "@/content/academy/texts";
-import { accuracyPct, recordSpeedRun, sentencesOf, validateRun, wcpm, wpm } from "@/lib/academy/speed";
+import { FLIGHT_TEXTS, type FlightText } from "@/content/academy/texts";
+import { accuracyPct, questionsWithinReading, recordSpeedRun, sentencesOf, validateRun, wcpm, wordsForSpeedTest, wpm } from "@/lib/academy/speed";
+import { nextTextId } from "@/lib/karaoke/model";
 import type { Academy, SpeedRun } from "@/lib/academy/state";
 import { play, stopAudio } from "@/lib/academy/audio";
 import { today } from "@/lib/progress";
@@ -25,6 +26,7 @@ import { Cheer } from "@/app/cheer";
  */
 
 /** Школьный замер 30.09.2026 — точка отсчёта графика. */
+const FLIGHT_IDS = FLIGHT_TEXTS.map(text => text.id);
 const SCHOOL_BASELINE = { date: "2026-09-30", wcpm: 8 };
 
 type Phase =
@@ -73,6 +75,7 @@ export function SpeedTest({
   update: (fn: (current: Academy) => Academy) => void;
   onBack: () => void;
 }) {
+  const [chosenId, setChosenId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ name: "choose" });
   const [errors, setErrors] = useState<Set<number>>(new Set());
   const [lastWord, setLastWord] = useState<number | null>(null);
@@ -81,11 +84,9 @@ export function SpeedTest({
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [problem, setProblem] = useState("");
 
-  // Следующий текст — тот, что читали давно или не читали вовсе.
-  const suggested = useMemo(() => {
-    const used = academy.speed.map((run) => run.textId);
-    return FLIGHT_TEXTS.find((text) => !used.includes(text.id)) ?? FLIGHT_TEXTS[academy.speed.length % FLIGHT_TEXTS.length]!;
-  }, [academy.speed]);
+  const suggestedId = useMemo(() => nextTextId(FLIGHT_IDS, academy.speed), [academy.speed]);
+  const suggested = FLIGHT_TEXTS.find(text => text.id === (chosenId ?? suggestedId))!;
+
 
   useEffect(() => {
     if (phase.name !== "running") return;
@@ -103,7 +104,32 @@ export function SpeedTest({
     setProblem("");
   };
 
-  const words = (text: FlightText) => text.text.split(/\s+/).filter(Boolean);
+  const words = (text: FlightText) => wordsForSpeedTest(text.text);
+  const finishQuestions = (item: Extract<Phase, { name: "questions" }>, checked: boolean[]) => {
+    const comprehension: [number, number] = [checked.filter(Boolean).length, checked.length];
+    if (item.practice) {
+      setPhase({ name: "result", run: null, record: false, practice: true, comprehension });
+      return;
+    }
+    const run: SpeedRun = {
+      date: today(),
+      textId: item.text.id,
+      seconds: Math.round(item.seconds * 10) / 10,
+      words: item.words,
+      errors: [...errors].filter(index => index < item.words).length,
+      comprehension,
+    };
+    const invalid = validateRun(run);
+    if (invalid) {
+      setProblem(invalid);
+      setPhase({ name: "result", run: null, record: false, practice: false, comprehension });
+      return;
+    }
+    const outcome = recordSpeedRun(academy, run);
+    update(current => recordSpeedRun(current, run).next);
+    setChosenId(null);
+    setPhase({ name: "result", run, record: outcome.record, practice: false, comprehension });
+  };
 
   const header = (title: string, back = onBack) => (
     <header className="ac-top">
@@ -121,7 +147,18 @@ export function SpeedTest({
     return (
       <main className="ac-screen">
         {header("Чтение на время")}
-        <p className="ac-note">Текст: «{suggested.title}», {countWords(suggested.text)} слов.</p>
+        <div className="ac-flight-selector">
+          <label htmlFor="ac-flight-text">Текст для чтения</label>
+          <select id="ac-flight-text" value={suggested.id} onChange={event => setChosenId(event.target.value)}>
+            {FLIGHT_TEXTS.map(text => <option key={text.id} value={text.id}>
+              {text.title}{text.author ? ` · ${text.author}` : ""} · {words(text).length} слов
+            </option>)}
+          </select>
+        </div>
+        <p className="ac-note">{words(suggested).length} слов{suggested.author ? ` · ${suggested.author}` : ""}
+          {suggested.form === "retelling" ? " · учебный пересказ" : suggested.form === "excerpt" ? " · отрывок" : ""}
+          {suggested.source && <> · <a href={suggested.source} target="_blank" rel="noreferrer">Источник</a></>}
+        </p>
         <div className="ac-mode-cards">
           <button type="button" className="ac-mode" onClick={() => { reset(); setPhase({ name: "practice", text: suggested }); }}>
             <BookOpen aria-hidden="true" />
@@ -156,7 +193,7 @@ export function SpeedTest({
           <button
             type="button"
             className="ac-btn go"
-            onClick={() => setPhase({ name: "questions", text: phase.text, seconds: 0, words: countWords(phase.text.text), practice: true })}
+            onClick={() => setPhase({ name: "questions", text: phase.text, seconds: 0, words: words(phase.text).length, practice: true })}
           >
             Я прочитал
             <ChevronRight aria-hidden="true" />
@@ -201,7 +238,17 @@ export function SpeedTest({
     return (
       <main className="ac-screen">
         {header(phase.text.title, () => setPhase({ name: "choose" }))}
-        <Dial seconds={seconds} />
+        <div className="ac-actions ac-flight-stop">
+          <output role="timer" aria-label={`Прошло ${format(seconds)}`}>{format(seconds)}</output>
+          <button
+            type="button"
+            className="ac-btn stop big"
+            onClick={() => setPhase({ name: "mark-end", text: phase.text, seconds: (Date.now() - phase.started) / 1000 })}
+          >
+            <Square aria-hidden="true" />
+            Стоп
+          </button>
+        </div>
         <div className="ac-words" aria-label="Текст. Нажмите на слово с ошибкой">
           {list.map((word, index) => (
             <button
@@ -222,37 +269,29 @@ export function SpeedTest({
             </button>
           ))}
         </div>
-        <div className="ac-actions">
-          <button
-            type="button"
-            className="ac-btn stop big"
-            onClick={() => setPhase({ name: "mark-end", text: phase.text, seconds: (Date.now() - phase.started) / 1000 })}
-          >
-            <Square aria-hidden="true" />
-            Стоп
-          </button>
-        </div>
+
       </main>
     );
   }
 
   if (phase.name === "mark-end") {
     const list = words(phase.text);
-    const end = lastWord ?? list.length - 1;
+    const end = lastWord ?? -1;
     const read = end + 1;
     const errorCount = [...errors].filter((index) => index <= end).length;
+    const reachedQuestions = questionsWithinReading(phase.text, read);
     return (
       <main className="ac-screen">
         {header("Где остановились?", () => setPhase({ name: "choose" }))}
         <p className="ac-note">
-          Время: {format(phase.seconds)}. Если текст не дочитан — нажмите на последнее прочитанное слово.
+          Время: {format(phase.seconds)}. Нажмите на последнее прочитанное слово.
         </p>
         <div className="ac-words">
           {list.map((word, index) => (
             <button
               key={index}
               type="button"
-              className={`ac-word-btn ${errors.has(index) ? "err" : ""} ${index === end ? "end" : ""} ${index > end ? "after" : ""}`}
+              className={`ac-word-btn ${errors.has(index) ? "err" : ""} ${index === end ? "end" : ""} ${end >= 0 && index > end ? "after" : ""}`}
               onClick={() => setLastWord(index)}
             >
               {word}
@@ -263,13 +302,19 @@ export function SpeedTest({
           Прочитано слов: <b>{read}</b>, ошибок: <b>{errorCount}</b>.
         </p>
         <div className="ac-actions">
+          <button type="button" className="ac-btn soft" onClick={() => setLastWord(list.length - 1)}>Весь текст</button>
           <button
             type="button"
             className="ac-btn go"
-            onClick={() => setPhase({ name: "questions", text: phase.text, seconds: phase.seconds, words: read, practice: false })}
+            disabled={!read}
+            onClick={() => {
+              const item = { name: "questions", text: phase.text, seconds: phase.seconds, words: read, practice: false } as const;
+              if (reachedQuestions.length) setPhase(item);
+              else finishQuestions(item, []);
+            }}
           >
             <Flag aria-hidden="true" />
-            К вопросам
+            {read && !reachedQuestions.length ? "К результату" : "К вопросам"}
           </button>
         </div>
       </main>
@@ -277,39 +322,17 @@ export function SpeedTest({
   }
 
   if (phase.name === "questions") {
-    const question = phase.text.questions[qIndex]!;
+    const questions = phase.practice ? phase.text.questions : questionsWithinReading(phase.text, phase.words);
+    const question = questions[qIndex]!;
     const answer = (option: string) => {
       const next = [...answers, option === question.answer];
       setAnswers(next);
       void play(option === question.answer ? "Точно в цель!" : "Ничего страшного. Давай ещё разок.");
-      if (qIndex + 1 < phase.text.questions.length) {
+      if (qIndex + 1 < questions.length) {
         setQIndex(qIndex + 1);
         return;
       }
-      const comprehension: [number, number] = [next.filter(Boolean).length, next.length];
-      if (phase.practice) {
-        setPhase({ name: "result", run: null, record: false, practice: true, comprehension });
-        return;
-      }
-      const list = words(phase.text);
-      const end = lastWord ?? list.length - 1;
-      const run: SpeedRun = {
-        date: today(),
-        textId: phase.text.id,
-        seconds: Math.round(phase.seconds * 10) / 10,
-        words: phase.words,
-        errors: [...errors].filter((index) => index <= end).length,
-        comprehension,
-      };
-      const invalid = validateRun(run);
-      if (invalid) {
-        setProblem(invalid);
-        setPhase({ name: "result", run: null, record: false, practice: false, comprehension });
-        return;
-      }
-      const outcome = recordSpeedRun(academy, run);
-      update((current) => recordSpeedRun(current, run).next);
-      setPhase({ name: "result", run, record: outcome.record, practice: false, comprehension });
+      finishQuestions(phase, next);
     };
     return (
       <main className="ac-screen">
@@ -326,7 +349,7 @@ export function SpeedTest({
           ))}
         </div>
         <p className="ac-note">
-          Вопрос {qIndex + 1} из {phase.text.questions.length}
+          Вопрос {qIndex + 1} из {questions.length}
         </p>
       </main>
     );
@@ -357,7 +380,7 @@ export function SpeedTest({
             <b>
               {phase.comprehension[0]}/{phase.comprehension[1]}
             </b>
-            <span>вопросы</span>
+            <span>{phase.comprehension[1] ? "вопросы" : "вопросы пропущены"}</span>
           </div>
         </div>
       ) : (

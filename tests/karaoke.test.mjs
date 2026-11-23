@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tokenize, advance, cues, metrics, appendRun, recommend } from '../lib/karaoke/model.ts';
-import { READING_TEXTS, prepareText } from '../content/karaoke/texts.ts';
+import { READING_TEXT_ARCHIVE, READING_TEXTS, prepareText } from '../content/karaoke/texts.ts';
 import { migrateAcademy } from '../lib/academy/state.ts';
 const run = { id:'one', date:'2026-11-15T12:00:00.000Z', textId:'cat', mode:'syllables', pace:15, elapsedMs:30000, totalWords:10, attempted:10, errors:[2], verified:true, answers:[true,true] };
 test('lexical counting preserves hyphens, stress, numbers and excludes punctuation', () => {
  assert.deepEqual(tokenize('«Кто-то», ёж! ма́ма — 12. ...').map(w=>w.text), ['Кто-то','ёж','ма́ма','12']);
 });
-test('all curated syllables round trip and canonical story has 37 words', () => {
+test('syllable cues round trip and the archived Ushinsky text has 37 words', () => {
  for (const t of READING_TEXTS) { const p=prepareText(t); assert.equal(p.parts.map(x=>x.join('')).join(' '), p.words.map(x=>x.text).join(' ')); assert.ok(p.parts.every(x=>x.every(Boolean))); }
- assert.equal(prepareText(READING_TEXTS[0]).words.length,37);
+ assert.equal(prepareText(READING_TEXT_ARCHIVE.find(t => t.id === "ushinsky-kindness-v1")).words.length,37);
 });
 test('syllable timing gives each word equal duration and handles tempo changes', () => {
  const c=cues([['ма','ма'],['кот']], 'syllables');
@@ -39,12 +39,14 @@ test('adaptation ignores unverified/short runs, requires two successes and under
  assert.equal(recommend([{...good,elapsedMs:1000}],'cat').pace,15);
 });
 
-test('library contains 30 different stories with valid questions and syllable boundaries', () => {
- assert.equal(READING_TEXTS.length,30);
- assert.equal(new Set(READING_TEXTS.map(t=>t.id)).size,30);
- assert.equal(new Set(READING_TEXTS.map(t=>prepareText(t).plain)).size,30);
+test('library contains 44 long stories with valid questions and reading cues', () => {
+ assert.equal(READING_TEXTS.length,44);
+ assert.equal(new Set(READING_TEXTS.map(t=>t.id)).size,44);
+ assert.equal(new Set(READING_TEXTS.map(t=>prepareText(t).plain)).size,44);
  for (const t of READING_TEXTS) {
-   const p=prepareText(t); assert.ok(p.words.length>=15,t.id);
+   const p=prepareText(t); assert.ok(p.words.length>=55,t.id);
+   const original = t.id.endsWith("-v2") && READING_TEXT_ARCHIVE.find(item => item.id === t.id.replace(/-v2$/, "-v1"));
+   if (original) assert.ok(p.words.length >= 3 * prepareText(original).words.length, t.id);
    for (const parts of p.parts) for (const part of parts) assert.ok((part.match(/[аеёиоуыэюя]/gi)||[]).length<=1,`${t.id}: ${part}`);
    for (const q of t.questions) { assert.equal(q.options.length,3); assert.ok(q.options[q.correct]); assert.equal(new Set(q.options).size,3); }
  }
@@ -55,7 +57,7 @@ test('automatic selection visits all texts before repeating and survives history
  const ids=READING_TEXTS.map(t=>t.id);let history=[];
  for(let round=0;round<4;round++) {
    const seen=new Set();
-   for(let i=0;i<30;i++) { const id=nextTextId(ids,history);assert.ok(!seen.has(id));seen.add(id);history=[...history,{textId:id}].slice(-60); }
+   for(let i=0;i<ids.length;i++) { const id=nextTextId(ids,history);assert.ok(!seen.has(id));seen.add(id);history=[...history,{textId:id}].slice(-60); }
  }
  assert.notEqual(nextTextId(ids,[],ids[0]),ids[0]);
 });

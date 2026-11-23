@@ -1149,3 +1149,8 @@
     font-size: 76px;
   }
 }
+
+.ac-flight-selector { display: grid; gap: 6px; max-width: 38rem; font-weight: 700; }
+.ac-flight-selector select { min-width: 0; min-height: 44px; border: 1px solid #8ca7bb; border-radius: 9px; padding: 7px 9px; background: #fff; color: #172c40; }
+.ac-actions.ac-flight-stop { position: sticky; top: 0; z-index: 5; justify-content: space-between; align-items: center; padding: 8px 0; background: #e9f5fc; }
+.ac-flight-stop output { font-size: 1.35rem; font-weight: 750; font-variant-numeric: tabular-nums; }

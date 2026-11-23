@@ -6,11 +6,12 @@ import { advance, appendRun, cues, metrics, recommend, nextTextId, type ReadingM
 import type { Academy } from "@/lib/academy/state";
 import "./karaoke.css";
 
+const TEXT_IDS = READING_TEXTS.map(text => text.id);
 const MODES = { manual: "В своём темпе", syllables: "Караоке по слогам", words: "Караоке целыми словами" };
 type Props = { academy: Academy; update: (fn: (a: Academy) => Academy) => void; onBack: () => void };
 
 export function Karaoke({ academy, update, onBack }: Props) {
-  const [textId, setTextId] = useState(() => nextTextId(["mark-cat-v1", ...READING_TEXTS.filter(t => t.id !== "mark-cat-v1").map(t => t.id)], academy.karaoke));
+  const [textId, setTextId] = useState(() => nextTextId(TEXT_IDS, academy.karaoke));
   const [mode, setMode] = useState<ReadingMode>("manual");
   const [pace, setPace] = useState(15);
   const [active, setActive] = useState(false);
@@ -19,14 +20,14 @@ export function Karaoke({ academy, update, onBack }: Props) {
   const advice = recommend(academy.karaoke, textId, pace);
   if (active) return <Reading key={attempt} text={text} mode={mode} initialPace={pace}
     onSave={run => update(a => ({ ...a, karaoke: appendRun(a.karaoke, run) }))}
-    onNext={() => { setTextId(nextTextId(READING_TEXTS.map(t => t.id), academy.karaoke, textId)); setAttempt(a => a + 1); }}
+    onNext={() => { setTextId(nextTextId(TEXT_IDS, academy.karaoke, textId)); setAttempt(a => a + 1); }}
     onAgain={() => setAttempt(a => a + 1)} onBack={() => setActive(false)} />;
   return <main className="ac-screen kr-screen">
     <button className="ac-btn soft" onClick={onBack}>← В Академию</button>
     <header className="kr-heading"><span className="ac-eyebrow">ЧИТАЕМ И ПОНИМАЕМ</span><h1>Чтение-караоке</h1>
       <p>Сначала спокойно и точно. Скорость придёт с практикой.</p></header>
     <div className="kr-setup">
-      <section className="kr-card"><h2>Выбери рассказ · {READING_TEXTS.length} вариантов</h2><p>Автоматически выбран ещё не прочитанный рассказ; после всей подборки вернёмся к самому давнему. Повторить знакомый можно вручную.</p><button className="ac-btn soft" onClick={() => setTextId(nextTextId(READING_TEXTS.map(t => t.id), academy.karaoke, textId))}>Другой рассказ</button><div className="kr-library">
+      <section className="kr-card"><h2>Выбери рассказ · {READING_TEXTS.length} вариантов</h2><p>Выбирай длинный рассказ или классику. Для нового занятия предлагаем текст, который ты ещё не читал.</p><button className="ac-btn soft" onClick={() => setTextId(TEXT_IDS[(TEXT_IDS.indexOf(textId) + 1) % TEXT_IDS.length]!)}>Другой рассказ</button><p aria-live="polite">Выбран рассказ «{text.title}»</p><div className="kr-library">
         {READING_TEXTS.map(t => <button key={t.id} aria-pressed={t.id === textId} onClick={() => setTextId(t.id)}>
           <span>{t.level}</span><strong>{t.title}</strong><small>{prepareText(t).words.length} слов · {t.author}</small>
         </button>)}

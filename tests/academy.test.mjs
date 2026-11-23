@@ -28,7 +28,7 @@ import {
   finishSession,
   isAircraftOpen,
 } from "../lib/academy/rewards.ts";
-import { recordSpeedRun, sentencesOf, validateRun, wcpm, wpm } from "../lib/academy/speed.ts";
+import { questionsWithinReading, recordSpeedRun, sentencesOf, validateRun, wcpm, wordsForSpeedTest, wpm } from "../lib/academy/speed.ts";
 import { buildReport, letterGrid } from "../lib/academy/report.ts";
 
 const DAY = 20_000;
@@ -353,4 +353,21 @@ test("отчёт родителю: сетка букв и рекомендаци
   assert.ok(report.recommendations.some((r) => r.title === "Повторить трудное"));
   assert.ok(report.recommendations.some((r) => r.title === "Лётный тест"));
   assert.equal(skillSummary(academy, "letters").mastered, 1);
+});
+
+
+test("long flight-test library includes sourced classics and only asks about words already read", () => {
+  assert.equal(FLIGHT_TEXTS.length, 15);
+  assert.equal(new Set(FLIGHT_TEXTS.map(text => text.id)).size, 15);
+  assert.equal(FLIGHT_TEXTS.filter(text => text.source && text.author).length, 11);
+  for (const text of FLIGHT_TEXTS) {
+    const count = wordsForSpeedTest(text.text).length;
+    assert.ok(count >= 75, text.title);
+    assert.ok(text.questions.every(q => q.evidence >= 0), text.title);
+    assert.deepEqual(questionsWithinReading(text, count), text.questions, text.title);
+    assert.deepEqual(questionsWithinReading(text, 0), [], text.title);
+  }
+  const fox = FLIGHT_TEXTS.find(text => text.id === "ft-fox-v2");
+  assert.equal(questionsWithinReading(fox, 7).length, 1);
+  assert.deepEqual(wordsForSpeedTest("Марк — пилот.  — Да!"), ["Марк", "— пилот.", "— Да!"]);
 });

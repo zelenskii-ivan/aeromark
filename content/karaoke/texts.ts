@@ -1,3 +1,6 @@
+import { CLASSIC_READINGS } from "../academy/classics.ts";
+import { FLIGHT_TEXTS } from "../academy/texts.ts";
+import { PRACTICE_CONTINUATIONS } from "./continuations.ts";
 import { PRACTICE } from "./practice.ts";
 import { tokenize } from "../../lib/karaoke/model.ts";
 
@@ -9,7 +12,7 @@ export type ReadingText = {
 
 /** Vertical bars are curated instructional syllable boundaries, never word
  * separators. They are hidden in the normal/whole-word reading view. */
-export const READING_TEXTS: ReadingText[] = [
+const ORIGINAL_READING_TEXTS: ReadingText[] = [
   {
     id: "ushinsky-kindness-v1", title: "Худо тому, кто добра не делает никому", author: "К. Д. Ушинский",
     level: "Из программы · читаем со взрослым",
@@ -56,6 +59,67 @@ export const READING_TEXTS: ReadingText[] = [
     ],
   })),
 ];
+
+const continuations = {
+  "mark-cat-v1": "Кот подошёл к окну. На ветке сидела птица. Кот хотел её поймать, но окно было закрыто. Он сел на тёплый коврик. Марк провёл рукой по его спине. Кот замурлыкал и снова закрыл глаза. Марк поставил миску рядом с ковриком.",
+  "mark-boat-v1": "Утка проплыла мимо и скрылась за камышами. Марк поставил лодку на камень и проверил, не набрала ли она воды. Лодка была сухая. Тогда Марк выбрал место, где ветер дул вдоль берега. Мама держала край верёвочки, которую они привязали к лодке. Лодка пошла ровно, не поворачивая к камышам. Марк потянул за верёвочку, и она подплыла обратно. Потом он нашёл на земле маленькую палочку. Он поставил её на лодку как мачту. Дома Марк захотел сделать для мачты цветной флаг.",
+};
+
+/** Adds reading cues to new prose. Preserve the editorial cues on the original
+ * opening paragraphs and keep й, ь and ъ with the preceding sound group. */
+function annotate(text: string) {
+  function chunk(word: string) {
+    const vowels = [...word.matchAll(/[аеёиоуыэюя]/gi)].map(match => match.index!);
+    let result = "";
+    let from = 0;
+    for (let i = 1; i < vowels.length; i++) {
+      const previous = vowels[i - 1]!;
+      const current = vowels[i]!;
+      let cut = previous + 1;
+      while (cut < current && /[йьъ]/i.test(word[cut]!)) cut++;
+      if (cut + 1 < current && /[ьъ]/i.test(word[cut + 1]!)) cut += 2;
+      result += word.slice(from, cut) + "|";
+      from = cut;
+    }
+    return result + word.slice(from);
+  }
+  return text.replace(/[а-яё]+(?:[-‑][а-яё]+)*/gi, word => word.split(/(?<=[-‑])/).map(chunk).join("|"));
+}
+
+const LONG_PRACTICE = ORIGINAL_READING_TEXTS.slice(1).map((text, index): ReadingText => {
+  const continuation = index < 2 ? continuations[text.id as keyof typeof continuations] : PRACTICE_CONTINUATIONS[index - 2]!;
+  return {
+    ...text,
+    id: text.id.replace(/-v1$/, "-v2"),
+    level: "Практика · длинный рассказ",
+    annotated: text.annotated + "\n\n" + annotate(continuation),
+  };
+});
+
+const LONG_CLASSICS = CLASSIC_READINGS.map((text): ReadingText => ({
+  id: text.id,
+  title: text.title,
+  author: text.form === "retelling" ? `По мотивам · ${text.author}` : text.author,
+  level: text.form === "retelling" ? "Классика · пересказ" : text.form === "excerpt" ? "Классика · отрывок" : "Классика · оригинал",
+  annotated: annotate(text.text),
+  source: text.source,
+  rights: text.form === "retelling" ? "Учебный пересказ AeroMark. Ссылка ведёт к произведению." :
+    "Произведение Л. Н. Толстого в общественном достоянии. Использован текст из собрания сочинений.",
+  curriculum: "Текст для практики чтения вслух, плавности и понимания.",
+  questions: text.questions.map(q => ({ prompt: q.question, options: q.options, correct: q.options.indexOf(q.answer) })),
+}));
+
+const TIMED_PRACTICE = FLIGHT_TEXTS.filter(text => !text.author).map((text): ReadingText => ({
+  id: text.id, title: text.title === "Утро" ? "Утро перед школой" : text.title,
+  author: "Учебный рассказ AeroMark", level: "Практика · длинный рассказ",
+  annotated: annotate(text.text), source: "",
+  rights: "Учебный рассказ AeroMark.",
+  curriculum: "Текст для практики чтения вслух, плавности и понимания.",
+  questions: text.questions.map(q => ({ prompt: q.question, options: q.options, correct: q.options.indexOf(q.answer) })),
+}));
+
+export const READING_TEXTS = [...LONG_PRACTICE, ...LONG_CLASSICS, ...TIMED_PRACTICE];
+export const READING_TEXT_ARCHIVE = [...READING_TEXTS, ...ORIGINAL_READING_TEXTS];
 
 export function prepareText(item: ReadingText) {
   const plain = item.annotated.replaceAll("|", "");
