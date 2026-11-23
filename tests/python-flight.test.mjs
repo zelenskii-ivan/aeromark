@@ -62,7 +62,7 @@ test("limits bound source, syntax, range, execution and output with a retry afte
   assert.equal(execute("print(1)").ok, true);
 });
 
-test("all thirteen missions have working solutions and final flights require a fuel guard", () => {
+test("all twenty-one missions have working solutions and final flights require a fuel guard", () => {
   const solutions = new Map([
     ["radio", ["Готов к взлёту!"]],
     ["radio-order", ["Старт!", "Взлёт!"]],
@@ -70,15 +70,23 @@ test("all thirteen missions have working solutions and final flights require a f
     ["radio-space", ["Взлёт разрешён"]],
     ["radio-quotes", ['"Полоса свободна"']],
     ["radio-repair", ['print("Курс 2")']],
+    ["radio-silent", [""]],
+    ["radio-compare", ['print("Один")']],
+    ["radio-bracket", [")"]],
+    ["radio-codeword", ['print("Сокол")']],
     ["settings", ["3", "2"]],
+    ["value-twice", ["4"]],
+    ["fuel-threshold", [">="]],
+    ["map-return", ['"left"', '"down"']],
+    ["loop-pairs", ["3"]],
     ["fuel", ["0"]],
     ["map", ["right", "3", 'move("up", 2)']],
     ["loop", ["3", 'move("up", 1)']],
   ]);
   const routes = { solo: [1, 4, 1], storm: [2, 5, 2], captain: [4, 6, 2] };
   assert.equal(COURSE.length, 6);
-  assert.equal(COURSE[0].missions.length, 6);
-  assert.equal(MISSIONS.length, 13);
+  assert.equal(COURSE[0].missions.length, 10);
+  assert.equal(MISSIONS.length, 21);
   for (const mission of MISSIONS) {
     const values = solutions.get(mission.id);
     let source;
@@ -125,4 +133,21 @@ test("practice opens after radio and preserves previously earned levels and badg
   const mission = practice[0];
   const wrongOrder = 'print("Взлёт!")\nprint("Старт!")';
   assert.equal(mission.passes(simulate(mission.map, run(wrongOrder)), wrongOrder), false);
+});
+
+test("later practices unlock without changing prerequisites for the original course", () => {
+  const radioAndVariables = ["radio", "settings"].map(missionKey);
+  assert.equal(isUnlocked(radioAndVariables, "value-twice"), true);
+  assert.equal(isUnlocked(radioAndVariables, "fuel"), true);
+  assert.equal(isUnlocked(radioAndVariables, "fuel-threshold"), false);
+  assert.equal(isUnlocked(radioAndVariables, "map-return"), false);
+  assert.equal(isUnlocked(radioAndVariables, "loop-pairs"), false);
+});
+
+test("free flight example reaches the airfield and reports a message", () => {
+  const sandbox = { start: [0, 0], goal: [5, 2], obstacles: [[2, 0], [2, 1]] };
+  const flight = simulate(sandbox, run('move("up", 2)\nmove("right", 5)\nprint("На месте!")'));
+  assert.equal(flight.problem, "");
+  assert.equal(flight.arrived, true);
+  assert.deepEqual(flight.output, ["На месте!"]);
 });

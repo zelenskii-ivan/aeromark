@@ -7,6 +7,7 @@ import { play, stopAudio } from "@/lib/academy/audio";
 import { execute } from "@/lib/python/interpreter";
 import { simulate, type Flight } from "@/lib/python/flight";
 import { assemble, COURSE, isUnlocked, missionKey, MISSIONS, programBadgeEarned, type Mission } from "@/content/python/missions";
+import { FreeFlight } from "./FreeFlight";
 import { FlightMap } from "./FlightMap";
 import "./python.css";
 
@@ -20,18 +21,33 @@ function preview(mission: Mission, source: string, values: readonly string[]) {
       if (line) lines.push([]);
       lines.at(-1)!.push({ text, editable: false });
     });
-    if (index < values.length) lines.at(-1)!.push({ text: values[index] || "___", editable: true });
+    if (index < values.length) lines.at(-1)!.push({ text: values[index] || (mission.slots[index]?.choices?.includes("") ? "" : "___"), editable: true });
   });
   return lines;
 }
 const phases = ["Предскажи", "Измени", "Запусти", "Объясни", "Результат"];
+const nextActions = [
+  "Посмотри на код и ответь на вопрос.",
+  "Измени выделенную часть кода. Затем нажми «Запустить».",
+  "Следи за строкой, которую выполняет программа.",
+  "Посмотри на результат. Объясни, почему так получилось.",
+  "Можно перейти к следующей миссии или попробовать ещё раз.",
+];
 
 export default function PythonAcademy({ wins, onComplete, onExit }: Props) {
   const [id, setId] = useState(() => MISSIONS.find(m => isUnlocked(wins, m.id) && !wins.includes(missionKey(m.id)))?.id ?? MISSIONS[0]!.id);
+  const [free, setFree] = useState(false);
   const mission = MISSIONS.find(item => item.id === id)!;
   const completed = MISSIONS.filter(item => wins.includes(missionKey(item.id))).length;
   const next = MISSIONS[MISSIONS.indexOf(mission) + 1];
   useEffect(() => stopAudio, []);
+
+  function openMission(missionId: string) {
+    stopAudio();
+    setId(missionId);
+    window.scrollTo(0, 0);
+  }
+
   return (
     <main className="py-academy">
       <header className="py-header">
@@ -43,7 +59,16 @@ export default function PythonAcademy({ wins, onComplete, onExit }: Props) {
           {programBadgeEarned(wins) && <strong>Достижение «Пилот-программист»</strong>}
         </div>
       </header>
-      <nav className="py-course" aria-label="Этапы курса">
+      <div className="py-mode py-buttons" aria-label="Режим тренировки">
+        <Button variant={free ? "outline" : "default"} aria-pressed={!free}
+          onClick={() => { stopAudio(); setFree(false); }}>Миссии</Button>
+        <Button variant={free ? "default" : "outline"} aria-pressed={free}
+          onClick={() => { stopAudio(); setFree(true); }}>Свободный полёт</Button>
+      </div>
+      {free ? <FreeFlight /> : <>
+      <details className="py-course-picker">
+        <summary>Все задания</summary>
+        <nav className="py-course" aria-label="Этапы курса">
         {COURSE.map(stage => (
           <section key={stage.name}>
             <h2>{stage.name}</h2>
@@ -51,16 +76,22 @@ export default function PythonAcademy({ wins, onComplete, onExit }: Props) {
               const done = wins.includes(missionKey(item.id));
               const unlocked = done || isUnlocked(wins, item.id);
               return <button key={item.id} disabled={!unlocked} aria-current={id === item.id ? "step" : undefined}
-                onClick={() => { stopAudio(); setId(item.id); }}>
+                onClick={event => {
+                  const details = event.currentTarget.closest("details");
+                  if (details) details.open = false;
+                  openMission(item.id);
+                }}>
                 {done ? <Check /> : !unlocked ? <Lock /> : null}{item.title}
               </button>;
             })}
           </section>
         ))}
-      </nav>
+        </nav>
+      </details>
       <Lesson key={id} mission={mission} rewarded={wins.includes(missionKey(id))}
         onComplete={() => onComplete(id)}
-        onNext={next ? () => { stopAudio(); setId(next.id); } : undefined} />
+        onNext={next ? () => openMission(next.id) : undefined} />
+      </>}
     </main>
   );
 }
@@ -79,7 +110,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
   const [feedback, setFeedback] = useState("");
   const [award, setAward] = useState(false);
   const [explained, setExplained] = useState(false);
-  const mapColumn = useRef<HTMLDivElement>(null);
+  const mapRegion = useRef<HTMLDivElement>(null);
   const terminal = useRef<HTMLElement>(null);
   const source = mission.mode === "free" ? code : assemble(mission, values);
   const frames = flight?.frames;
@@ -130,7 +161,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
   }
   function showPlayback() {
     if (!window.matchMedia("(max-width: 700px)").matches) return;
-    const target = COURSE[0]?.missions.includes(mission) ? terminal.current : mapColumn.current;
+    const target = COURSE[0]?.missions.includes(mission) ? terminal.current : mapRegion.current;
     target?.scrollIntoView({ block: "start" });
   }
   function run() {
@@ -171,8 +202,9 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
       <ol className="py-phases" aria-label="Шаги миссии">
         {phases.map((name, index) => <li key={name} aria-current={phase === index ? "step" : undefined}>{name}</li>)}
       </ol>
-      <div className="py-workspace">
-        <div className="py-stack" ref={mapColumn}>
+      <p className="py-next-action" role="status"><strong>{phases[phase]}.</strong> {nextActions[phase]}</p>
+      <div className="py-workspace py-lesson">
+        <div className="py-stack">
           <section className="py-panel py-brief">
             <div className="py-map-heading">
               <h2>{mission.title}</h2>
@@ -181,7 +213,9 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
             <p>{mission.instruction}</p>
             <details><summary>Подсказка</summary><p>{mission.hint}</p></details>
           </section>
-          <FlightMap map={mission.map} frames={frames ?? []} cursor={cursor} />
+          <div className="py-lesson-map" ref={mapRegion}>
+            <FlightMap map={mission.map} frames={frames ?? []} cursor={cursor} />
+          </div>
           <section className="py-panel py-terminal" aria-label="Терминал" ref={terminal}>
             <h2>Терминал</h2>
             {cursor >= 0 && activeLine && <code>Строка {activeLine} · {source.split("\n")[activeLine - 1]?.trim()}</code>}
@@ -190,7 +224,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
           </section>
         </div>
         <div className="py-stack">
-          {!predicted && <section className="py-panel">
+          {!predicted && <section className="py-panel py-prediction">
             <div className="py-map-heading"><h2>{mission.predict.prompt}</h2>
               <Button variant="outline" aria-label="Послушать вопрос" onClick={() => void play([mission.predict.prompt, ...mission.predict.choices].join(". "))}><Volume2 /></Button>
             </div>
@@ -217,7 +251,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
                   <div className="py-buttons py-choices">
                     {slot.choices.map(choice => (
                       <Button key={choice} variant="outline" aria-pressed={choice === values[index]}
-                        onClick={() => updateValue(index, choice)}>{choice}</Button>
+                        onClick={() => updateValue(index, choice)}>{choice || "Без знака"}</Button>
                     ))}
                   </div>
                 </fieldset>
@@ -242,7 +276,7 @@ function Lesson({ mission, rewarded, onComplete, onNext }: {
             </div>}
             {result && !playing && <p className="py-feedback" role="status">{result}</p>}
           </section>
-          {valid && !playing && !explained && <section className="py-panel">
+          {valid && !playing && !explained && <section className="py-panel py-explanation">
             <div className="py-map-heading"><h2>{mission.explain.prompt}</h2>
               <Button variant="outline" aria-label="Послушать вопрос" onClick={() => void play([mission.explain.prompt, ...mission.explain.choices].join(". "))}><Volume2 /></Button>
             </div>

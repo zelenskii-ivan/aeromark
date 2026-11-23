@@ -88,3 +88,21 @@ fieldset.py-field { min-width: 0; padding: 0; border: 0; }
   .py-stack, .py-terminal { scroll-margin-top: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .py-plane, .py-plane svg { transition: none; } }
+.py-mode { margin: 18px 0 10px; }
+.py-course-picker { margin: 0 0 14px; }
+.py-course-picker > summary { width: fit-content; cursor: pointer; color: var(--py-accent); font-weight: 700; padding: 8px 0; }
+.py-course-picker .py-course { margin: 4px 0 0; }
+.py-academy .py-next-action { margin: 0 0 12px; padding: 10px 12px; border-left: 3px solid var(--py-accent); border-radius: 5px; background: #e6f5ef; }
+.py-next-action strong { color: var(--py-accent); }
+.py-lab { display: grid; gap: 12px; margin-top: 14px; }
+.py-lab header p { margin-top: 5px; }
+
+@media (max-width: 700px) {
+  .py-lesson > .py-stack { display: contents; }
+  .py-lesson .py-brief { order: 0; }
+  .py-lesson .py-prediction { order: 1; }
+  .py-lesson .py-editor { order: 2; }
+  .py-lesson .py-lesson-map { order: 3; scroll-margin-top: 10px; }
+  .py-lesson .py-terminal { order: 4; }
+  .py-lesson .py-explanation, .py-lesson .py-success { order: 5; }
+}

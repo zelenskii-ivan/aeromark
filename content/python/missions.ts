@@ -164,20 +164,111 @@ const PRINT_PRACTICE = [
   }, "Маяк", "Курс 2", "Конец связи"),
 ];
 
-export const MISSIONS = [CORE_MISSIONS[0]!, ...PRINT_PRACTICE, ...CORE_MISSIONS.slice(1)];
+const MORE_PRINT = [
+  printMission({
+    id: "radio-silent", title: "Тихая строка", mode: "values",
+    instruction: "Включи сигнал «Маяк!».",
+    speech: "Решётка в начале строки превращает её в заметку. Питон её пропускает. Убери решётку, чтобы включить маяк.",
+    hint: "Строка с решёткой в начале не выполняется.",
+    parts: ['print("Связь включена")\n', 'print("Маяк!")'],
+    slots: [slots("Начало строки", "# ", "# ", "")],
+    predict: question("Что покажет пример с решёткой?", ["Два сигнала", "Только «Связь включена»"], 1),
+    explain: question("Почему теперь появился сигнал?", ["Убрали решётку", "Поменяли слово в кавычках"], 0),
+  }, "Связь включена", "Маяк!"),
+  printMission({
+    id: "radio-compare", title: "Две разные команды", mode: "complete",
+    instruction: "В первой строке передай «1», во второй — «Один».",
+    speech: "Сравни число один и слово один. Выбери команду, которая напечатает слово во второй строке.",
+    hint: "Число пишем без кавычек. Слово пишем в кавычках.",
+    parts: ["print(1)\n", ""],
+    slots: [slots("Вторая команда", "print(1)", "print(1)", 'print("Один")', 'print("1")')],
+    predict: question("Что напечатает пример?", ["Два раза 1", "1 и Один"], 0),
+    explain: question("Почему вторая строка стала другой?", ["Терминал перевёл число", "Вторая команда получила слово"], 1),
+  }, "1", "Один"),
+  printMission({
+    id: "radio-bracket", title: "Закрой скобку", mode: "complete",
+    instruction: "Найди пропущенный знак. Передай «Слышу!».",
+    speech: "У команды принт есть открывающая и закрывающая скобки. Найди недостающий знак в конце строки.",
+    hint: "Кавычки уже на месте. Посмотри на круглые скобки.",
+    parts: ['print("Слышу!"', ""],
+    slots: [slots("Последний знак", "", ")", "(", '"')],
+    predict: question("Какой знак остался без пары?", ["Кавычка", "Открывающая скобка"], 1),
+    explain: question("Что сделала скобка справа?", ["Закончила вызов print", "Добавила знак к сообщению"], 0),
+  }, "Слышу!"),
+  printMission({
+    id: "radio-codeword", title: "Секретный позывной", mode: "complete",
+    instruction: "Передай «Сокол» между словами «База» и «Приём».",
+    speech: "В терминале должны быть по порядку: База, Сокол, Приём. Вставь одну команду в середину.",
+    hint: 'Чтобы передать слово, напиши print("Сокол").',
+    parts: ['print("База")\n', '\nprint("Приём")'],
+    slots: [slots("Средняя строка", "# Твоя команда")],
+    predict: question("Где нужна новая команда?", ["После «Приём»", "Между двумя командами"], 1),
+    explain: question("Почему «Сокол» появился вторым?", ["Команда стояла второй", "Терминал отсортировал слова"], 0),
+  }, "База", "Сокол", "Приём"),
+];
+
+const VARIABLE_PRACTICE = printMission({
+  id: "value-twice", title: "Один запас, два сигнала", mode: "values",
+  instruction: "Измени запас так, чтобы обе команды напечатали 4.",
+  speech: "Две команды читают одну переменную. Измени только значение запаса.",
+  hint: "Обе команды print берут значение из одной переменной tank.",
+  parts: ["tank = ", "\nprint(tank)\nprint(tank)"],
+  slots: [slots("Запас", "2", "2", "4", "6")],
+  predict: question("Что напечатает пример?", ["2 и 2", "2 и 4"], 0),
+  explain: question("Почему изменились обе строки?", ["У них одна переменная", "Вторая команда копирует первую"], 0),
+}, "4", "4");
+
+const CONDITION_PRACTICE = printMission({
+  id: "fuel-threshold", title: "Ровно на границе", mode: "values",
+  instruction: "Правило изменилось. При запасе ровно 3 взлёт разрешён.",
+  speech: "Знак больше пропускает только числа выше трёх. Знак больше или равно пропускает и само число три.",
+  hint: "Сравни знаки > и >=. Второй означает «больше или равно».",
+  parts: ["fuel = 3\nif fuel ", ' 3:\n    print("Летим!")\nelse:\n    print("Ждём")'],
+  slots: [slots("Знак сравнения", ">", ">", ">=", "<")],
+  predict: question("Что напечатает исходный код?", ["Летим!", "Ждём"], 1),
+  explain: question("Почему мы можем лететь с запасом 3?", ["3 больше 3", "3 равно 3, и новый знак это разрешает"], 1),
+}, "Летим!");
+
+const COORDINATE_PRACTICE: Mission = {
+  id: "map-return", title: "Поворот назад", mode: "complete",
+  instruction: "Ты в (4, 3). Долети до (1, 1).",
+  speech: "Первое число уменьшается, когда летим влево. Второе уменьшается, когда снижаемся.",
+  hint: 'Попробуй move("left", 3), затем move("down", 2).',
+  parts: ["move(", ", 3)\nmove(", ", 2)"],
+  slots: [slots("Первое направление", '"right"', '"right"', '"left"'), slots("Второе направление", '"up"', '"up"', '"down"')],
+  map: { start: [4, 3], goal: [1, 1] },
+  predict: question("Как меняются обе координаты?", ["Становятся меньше", "Становятся больше"], 0),
+  explain: question("Какой манёвр изменил вторую координату?", ["Полёт влево", "Снижение"], 1),
+  passes: flight => flight.arrived,
+};
+
+const LOOP_PRACTICE: Mission = {
+  id: "loop-pairs", title: "Два шага за повтор", mode: "values",
+  instruction: "За один повтор самолёт летит на 2 клетки. Достигни (6, 0).",
+  speech: "Каждый повтор даёт две клетки. Посчитай: два, четыре, шесть. Сколько повторов понадобилось?",
+  hint: "После одного повтора самолёт в клетке 2, после двух — в клетке 4.",
+  parts: ["for i in range(", '):\n    move("right", 2)'],
+  slots: [slots("Повторов", "2", "2", "3", "4")],
+  map: where([6, 0]),
+  predict: question("Где остановится исходная программа?", ["В клетке 2", "В клетке 4"], 1),
+  explain: question("Как получились 6 клеток?", ["Три раза по две клетки", "Три раза по одной клетке"], 0),
+  passes: flight => flight.arrived,
+};
+
+export const COURSE = [
+  { name: "Первые команды", missions: [CORE_MISSIONS[0]!, ...PRINT_PRACTICE, ...MORE_PRINT] },
+  { name: "Переменные", missions: [CORE_MISSIONS[1]!, VARIABLE_PRACTICE] },
+  { name: "Условия if / else", missions: [CORE_MISSIONS[2]!, CONDITION_PRACTICE] },
+  { name: "Координаты", missions: [CORE_MISSIONS[3]!, COORDINATE_PRACTICE] },
+  { name: "Циклы", missions: [CORE_MISSIONS[4]!, LOOP_PRACTICE] },
+  { name: "Самостоятельный полёт", missions: CORE_MISSIONS.slice(5) },
+];
+
+export const MISSIONS = COURSE.flatMap(stage => stage.missions);
 
 export function programBadgeEarned(wins: readonly string[]) {
   return CORE_MISSIONS.every(mission => wins.includes(missionKey(mission.id)));
 }
-
-export const COURSE = [
-  { name: "Первые команды", missions: [CORE_MISSIONS[0]!, ...PRINT_PRACTICE] },
-  { name: "Переменные", missions: CORE_MISSIONS.slice(1, 2) },
-  { name: "Условия if / else", missions: CORE_MISSIONS.slice(2, 3) },
-  { name: "Координаты", missions: CORE_MISSIONS.slice(3, 4) },
-  { name: "Циклы", missions: CORE_MISSIONS.slice(4, 5) },
-  { name: "Самостоятельный полёт", missions: CORE_MISSIONS.slice(5) },
-];
 
 export const missionKey = (id: string) => `python-flight:${id}`;
 
@@ -186,9 +277,10 @@ export function assemble(mission: Mission, values: readonly string[]) {
 }
 
 export function isUnlocked(wins: readonly string[], id: string) {
-  if (PRINT_PRACTICE.some(mission => mission.id === id)) return wins.includes(missionKey("radio"));
-  const index = CORE_MISSIONS.findIndex(mission => mission.id === id);
-  return index >= 0 && (index === 0 || wins.includes(missionKey(CORE_MISSIONS[index - 1]!.id)));
+  const coreIndex = CORE_MISSIONS.findIndex(mission => mission.id === id);
+  if (coreIndex >= 0) return coreIndex === 0 || wins.includes(missionKey(CORE_MISSIONS[coreIndex - 1]!.id));
+  const stage = COURSE.find(item => item.missions.some(mission => mission.id === id));
+  return !!stage && wins.includes(missionKey(stage.missions[0]!.id));
 }
 
 export function grantMission<T extends { gameWins: string[]; stars: number }>(progress: T, id: string): T {
