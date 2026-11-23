@@ -43,6 +43,7 @@ import {
   type Lesson,
   type Step,
 } from "@/content/lesson";
+import { grantMission, MISSIONS, missionKey } from "@/content/python/missions";
 import { LessonPlayer } from "@/app/lesson-player";
 import {
   DAYS_NOUN,
@@ -116,6 +117,8 @@ const MriyaGame = dynamic(() => import("@/app/an225/MriyaGame"), {
   ),
 });
 
+const PythonAcademy = dynamic(() => import("@/app/python/PythonAcademy"), { ssr: false });
+
 const SU57_WIN = "su57-puzzle";
 const MRIYA_WIN = "an225-mriya";
 
@@ -137,7 +140,8 @@ type Mode =
   | "mriya"
   | "academy"
   | "roads"
-  | "mathYear";
+  | "mathYear"
+  | "python";
 
 /** Все статичные задачи по id — на этом держится режим работы над ошибками. */
 const taskIndex = new Map<string, Task>(
@@ -596,6 +600,17 @@ export default function Home() {
     return <Roads key={sync.state.childId ?? "local"} state={saved.roads} update={fn => setSaved(current => ({ ...current, roads: fn(current.roads) }))} pilotName={pilotName} onExit={() => setMode("home")} />;
   }
 
+  if (mode === "python") {
+    return (
+      <PythonAcademy
+        key={sync.state.childId ?? "local"}
+        wins={saved.gameWins}
+        onComplete={(id) => setSaved(current => grantMission(current, id))}
+        onExit={() => setMode("home")}
+      />
+    );
+  }
+
   if (mode === "academy") {
     return (
       <Academy
@@ -899,6 +914,16 @@ export default function Home() {
                 <BookOpen />
                 В Академию
               </Button>
+            </article>
+
+            <article className="action-card academy-entry">
+              <div>
+                <h2>Изучаем Python</h2>
+                <p>Программируй свой самолёт! Пройдено миссий:{" "}
+                  {MISSIONS.filter(item => saved.gameWins.includes(missionKey(item.id))).length} из {MISSIONS.length}.
+                </p>
+              </div>
+              <Button size="lg" onClick={() => setMode("python")}><Plane /> В Python</Button>
             </article>
 
             {/* Пока диагностика не пройдена, «Продолжить» и «Начать отсюда» —

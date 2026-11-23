@@ -1,0 +1,87 @@
+.py-academy {
+  --py-ink: #122f46;
+  --py-muted: #415b72;
+  --py-line: #d4e0ea;
+  --py-accent: #0b675b;
+  max-width: 1160px;
+  margin: auto;
+  padding: clamp(14px, 3vw, 32px);
+  color: var(--py-ink);
+}
+.py-academy h1, .py-academy h2, .py-academy p { margin: 0; }
+.py-academy h1 { font-size: clamp(1.6rem, 4vw, 2.6rem); line-height: 1.1; }
+.py-academy h2 { font-size: 1.13rem; line-height: 1.3; }
+.py-academy p { color: var(--py-muted); }
+.py-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.py-header > div:nth-of-type(1) { flex: 1 1 220px; }
+.py-header p { margin-top: 6px; }
+.py-progress { display: grid; gap: 5px; font-size: .9rem; }
+.py-progress progress { width: 100%; accent-color: var(--py-accent); }
+.py-progress span, .py-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.py-progress svg, .py-legend svg { width: 17px; height: 17px; }
+.py-course { display: flex; gap: 8px; flex-wrap: wrap; margin: 22px 0; }
+.py-course section { display: flex; flex-wrap: wrap; flex: 1 1 auto; align-content: flex-start; gap: 5px; padding: 7px; background: #ecf3f8; border-radius: 10px; }
+.py-course h2 { flex-basis: 100%; font-size: .8rem; }
+.py-course button { display: inline-flex; gap: 5px; align-items: center; min-height: 42px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--py-line); color: var(--py-ink); background: #fff; font-weight: 650; }
+.py-course button[aria-current] { border-color: var(--py-accent); background: #daf4ec; }
+.py-course button:disabled { color: #52677b; background: #eff4f8; }
+.py-course svg { width: 14px; height: 14px; }
+.py-phases { list-style: none; display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 0; margin: 0 0 12px; font-size: .9rem; color: var(--py-muted); }
+.py-phases li[aria-current] { color: var(--py-accent); font-weight: 800; text-decoration: underline; text-underline-offset: 4px; }
+.py-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.py-stack { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.py-panel { display: grid; gap: 12px; padding: clamp(12px, 2vw, 18px); background: #fff; border: 1px solid var(--py-line); border-radius: 14px; min-width: 0; }
+.py-panel h2 svg { display: inline-block; vertical-align: middle; margin-right: 4px; width: 20px; }
+.py-map-heading { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.py-map-heading > span { font-size: .85rem; color: var(--py-muted); }
+.py-map { padding: 9px 0 19px 19px; }
+.py-grid {
+  position: relative;
+  aspect-ratio: 7 / 5;
+  border: 1px solid #95b5cb;
+  background-color: #e0f3fb;
+  background-image: linear-gradient(to right, #a8c8db 1px, transparent 1px), linear-gradient(to bottom, #a8c8db 1px, transparent 1px);
+  background-size: calc(100% / 7) calc(100% / 5);
+}
+.py-axis { position: absolute; display: flex; text-align: center; color: var(--py-muted); font-size: .75rem; }
+.py-axis-x { bottom: -19px; width: 100%; }
+.py-axis-x span { flex: 1; }
+.py-axis-y { left: -17px; top: 0; height: 100%; flex-direction: column; }
+.py-axis-y span { flex: 1; display: grid; place-items: center; }
+.py-marker, .py-plane { position: absolute; transform: translate(-50%, -50%); display: grid; place-items: center; }
+.py-marker { width: 66%; height: 72%; max-width: 37px; max-height: 32px; border-radius: 7px; border: 1px solid currentColor; }
+.py-marker svg, .py-plane svg { width: clamp(15px, 4vw, 26px); height: auto; }
+.py-start { color: #254d74; background: #edf6ff; }
+.py-goal { color: #146149; background: #c4f1dd; }
+.py-storm { color: #664183; background: #ece0fb; }
+.py-trail { position: absolute; min-width: 3px; min-height: 3px; border-top: 3px dashed #0e6e78; transform: translateY(-1px); z-index: 1; }
+.py-trail[data-vertical="true"] { border: 0; border-left: 3px dashed #0e6e78; transform: translateX(-1px); }
+.py-plane { z-index: 2; width: clamp(22px, 5vw, 35px); aspect-ratio: 1; border-radius: 50%; color: #fff; background: #0e5b8a; transition: left 230ms ease, top 230ms ease; }
+.py-plane svg { transition: transform 180ms ease; }
+.py-plane-landed { background: #096746; }
+.py-plane-blocked { background: #9a431e; }
+.py-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: .82rem; color: var(--py-muted); }
+.py-brief summary { width: fit-content; cursor: pointer; color: var(--py-accent); font-weight: 700; }
+.py-brief details p { margin-top: 6px; }
+.py-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.py-academy button, .py-editor select, .py-editor input { min-height: 44px; }
+.py-buttons button { max-width: 100%; white-space: normal; height: auto; text-align: left; }
+.py-field { display: grid; gap: 4px; }
+.py-field label { font-weight: 650; }
+.py-editor input, .py-editor textarea, .py-editor select { width: 100%; border: 1px solid #6f9aa8; border-radius: 8px; background: #f1fbfa; color: var(--py-ink); padding: 8px; font-size: 1rem; }
+.py-editor textarea { font-family: monospace; resize: vertical; tab-size: 4; }
+.py-code, .py-terminal pre { margin: 0; padding: 9px; color: #f3faff; background: #142e45; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .88rem; }
+.py-code > span { display: block; min-height: 1.45em; }
+.py-code > span > span:first-child { display: inline-block; color: #b9cde0; min-width: 3ch; margin-right: 6px; user-select: none; }
+.py-code mark { color: #d5fff2; background: #216051; border-radius: 2px; }
+.py-code > span[data-active="true"] { background: #315373; outline: 1px solid #a7ddf5; }
+.py-terminal code { overflow-wrap: anywhere; }
+.py-panel .py-feedback { color: #81421e; }
+.py-success { background: #e8fbf3; border-color: #9ad9c0; }
+@media (max-width: 700px) {
+  .py-course { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .py-course section:last-child { grid-column: 1 / -1; }
+  .py-workspace { grid-template-columns: minmax(0, 1fr); }
+  .py-stack, .py-terminal { scroll-margin-top: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .py-plane, .py-plane svg { transition: none; } }
