@@ -52,16 +52,31 @@ test("в практике состава — части, которых не б�
   for (const prompt of practice) assert.doesNotMatch(prompt, /это (1|2|7|8) и/);
 });
 
-test("следующая тема — первая непройденная, «готовится» пропускается", () => {
+test("следующая тема — первая непройденная, дополнительные — в последнюю очередь", () => {
   assert.equal(nextTopic([])?.id, "y-compare");
   assert.equal(nextTopic(["math-compare"])?.id, "y-neighbors");
   const all = mathYearLessons.map((l) => l.id);
   assert.equal(nextTopic(all), null);
+  const extras = MATH_YEAR.flatMap((q) => q.topics).filter((t) => t.extra);
+  assert.ok(extras.length > 0);
+  const allButExtras = all.filter((id) => !extras.some((t) => t.lesson?.id === id));
+  assert.equal(nextTopic(allButExtras)?.id, extras[0].id);
+});
+
+test("теперь у каждой темы года есть урок", () => {
+  const empty = MATH_YEAR.flatMap((q) => q.topics).filter((t) => !t.lesson).map((t) => t.id);
+  assert.deepEqual(empty, []);
+});
+
+test("дополнительные темы не отнимают уже заработанный самолёт", () => {
+  const q1 = MATH_YEAR[0];
+  const core = q1.topics.filter((t) => !t.extra).map((t) => t.lesson.id);
+  assert.equal(quarterProgress(q1, core).complete, true);
 });
 
 test("статусы тем", () => {
-  const [props, , , compare, neighbors] = MATH_YEAR[0].topics;
-  assert.equal(topicStatus(props, [], "y-compare"), "soon");
+  const [, , , compare, neighbors] = MATH_YEAR[0].topics;
+  assert.equal(topicStatus({ ...compare, lesson: null }, [], "y-compare"), "soon");
   assert.equal(topicStatus(compare, [], "y-compare"), "next");
   assert.equal(topicStatus(neighbors, [], "y-compare"), "open");
   assert.equal(topicStatus(compare, ["math-compare"], "y-neighbors"), "done");
@@ -69,7 +84,8 @@ test("статусы тем", () => {
 
 test("четверть закрывается, когда пройдены все её готовые уроки", () => {
   const q1 = MATH_YEAR[0];
-  const allButLast = ids(q1).slice(0, -1);
+  const core = (quarter) => quarter.topics.flatMap((t) => (t.lesson && !t.extra ? [t.lesson.id] : []));
+  const allButLast = core(q1).slice(0, -1);
   assert.equal(quarterProgress(q1, allButLast).complete, false);
   assert.equal(quarterProgress(q1, ids(q1)).complete, true);
   assert.equal(quarterJustCompleted(allButLast, ids(q1))?.id, "q1");
@@ -79,7 +95,7 @@ test("четверть закрывается, когда пройдены вс�
 });
 
 test("четверть без готовых уроков не считается пройденной", () => {
-  const q4 = MATH_YEAR[3];
+  const q4 = { ...MATH_YEAR[3], topics: MATH_YEAR[3].topics.map((t) => ({ ...t, lesson: null })) };
   assert.equal(quarterProgress(q4, []).ready, 0);
   assert.equal(quarterProgress(q4, []).complete, false);
 });

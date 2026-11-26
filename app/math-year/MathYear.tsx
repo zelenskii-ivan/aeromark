@@ -110,13 +110,16 @@ export function MathYear({ completed, stars, pilotName, soundOn, celebrate, onCe
                         className={`my-topic ${status}`}
                         disabled={status === "soon"}
                         onClick={() => item.lesson && onStart(item.lesson)}
-                        aria-label={`${item.title}. ${STATUS_LABEL[status]}`}
+                        aria-label={`${item.title}. ${STATUS_LABEL[status]}${item.extra ? ", дополнительно" : ""}`}
                       >
                         <span className="my-topic-mark" aria-hidden="true">
                           {status === "done" ? <Check size={18} /> : status === "next" ? <Plane size={18} /> : status === "soon" ? <Clock size={16} /> : null}
                         </span>
                         <span className="my-topic-title">{item.title}</span>
-                        <span className="my-topic-state">{STATUS_LABEL[status]}</span>
+                        <span className="my-topic-state">
+                          {STATUS_LABEL[status]}
+                          {item.extra && status !== "done" ? " · дополнительно" : ""}
+                        </span>
                       </button>
                     </li>
                   );

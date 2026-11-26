@@ -1,6 +1,21 @@
 import type { Lesson } from "../lesson.ts";
 import { mathBond10 } from "../lessons/math-bond-10.ts";
 import { bondLesson, compareLesson, neighborsLesson } from "./generators.ts";
+import {
+  add10Lesson,
+  add20Lesson,
+  cmLesson,
+  crossLesson,
+  groupsLesson,
+  problemLesson,
+  propsLesson,
+  reviewLesson,
+  segmentLesson,
+  spaceLesson,
+  swapLesson,
+  teensLesson,
+  zeroLesson,
+} from "./year-lessons.ts";
 
 /**
  * Математика на год: 1 класс.
@@ -20,6 +35,12 @@ export type Topic = {
   /** Раздел программы, как в учебнике. */
   section: string;
   lesson: Lesson | null;
+  /**
+   * Тема добавлена в четверть, которую дети уже могли закрыть. Она открыта и
+   * видна на карте, но не нужна для самолёта в ангаре: иначе обновление
+   * приложения забрало бы у ребёнка уже заработанную награду.
+   */
+  extra?: boolean;
 };
 
 export type Quarter = {
@@ -39,6 +60,8 @@ const topic = (id: string, title: string, section: string, lesson: Lesson | null
   lesson,
 });
 
+const extra = (item: Topic): Topic => ({ ...item, extra: true });
+
 const SECTION = {
   compare: "Сравнение и счёт предметов",
   sets: "Множества",
@@ -57,9 +80,9 @@ export const MATH_YEAR: readonly Quarter[] = [
     months: "сентябрь — октябрь",
     aircraft: { name: "Учебный планер", color: "#3a9d5d", kind: "plane" },
     topics: [
-      topic("y-props", "Признаки предметов: цвет, форма, размер", SECTION.compare),
-      topic("y-space", "Вверху, внизу, слева, справа", SECTION.compare),
-      topic("y-groups", "Группы предметов: больше, меньше, поровну", SECTION.sets),
+      extra(topic("y-props", "Признаки предметов: цвет, форма, размер", SECTION.compare, propsLesson())),
+      extra(topic("y-space", "Вверху, внизу, слева, справа", SECTION.compare, spaceLesson())),
+      extra(topic("y-groups", "Группы предметов: больше, меньше, поровну", SECTION.sets, groupsLesson())),
       topic("y-compare", "Сравнение чисел: >, <, =", SECTION.numbers10, compareLesson()),
       topic("y-neighbors", "Соседи числа: прибавить и вычесть 1", SECTION.numbers10, neighborsLesson()),
       topic("y-bond-2", "Состав числа 2", SECTION.numbers10, bondLesson(2)),
@@ -80,8 +103,8 @@ export const MATH_YEAR: readonly Quarter[] = [
       topic("y-bond-8", "Состав числа 8", SECTION.numbers10, bondLesson(8)),
       topic("y-bond-9", "Состав числа 9", SECTION.numbers10, bondLesson(9)),
       topic("y-bond-10", "Состав числа 10", SECTION.numbers10, mathBond10),
-      topic("y-segment", "Точка, линия, отрезок", SECTION.numbers10),
-      topic("y-zero", "Число 0", SECTION.numbers10),
+      topic("y-segment", "Точка, линия, отрезок", SECTION.numbers10, segmentLesson()),
+      topic("y-zero", "Число 0", SECTION.numbers10, zeroLesson()),
     ],
   },
   {
@@ -91,10 +114,10 @@ export const MATH_YEAR: readonly Quarter[] = [
     months: "январь — март",
     aircraft: { name: "Пассажирский лайнер", color: "#2a6fb5", kind: "plane" },
     topics: [
-      topic("y-add10", "Сложение и вычитание в пределах 10", SECTION.add10),
-      topic("y-swap", "Переставь слагаемые", SECTION.add10),
-      topic("y-problem", "Задача: условие и вопрос", SECTION.add10),
-      topic("y-cm", "Длина: сантиметр", SECTION.add10),
+      topic("y-add10", "Сложение и вычитание в пределах 10", SECTION.add10, add10Lesson()),
+      topic("y-swap", "Переставь слагаемые", SECTION.add10, swapLesson()),
+      topic("y-problem", "Задача: условие и вопрос", SECTION.add10, problemLesson()),
+      topic("y-cm", "Длина: сантиметр", SECTION.add10, cmLesson()),
     ],
   },
   {
@@ -104,10 +127,10 @@ export const MATH_YEAR: readonly Quarter[] = [
     months: "апрель — май",
     aircraft: { name: "Ракета", color: "#b8323a", kind: "rocket" },
     topics: [
-      topic("y-teens", "Второй десяток: десяток и единицы", SECTION.numbers20),
-      topic("y-add20", "Сложение и вычитание без перехода через десяток", SECTION.add20),
-      topic("y-cross", "Сложение с переходом через десяток", SECTION.add20),
-      topic("y-review", "Что я умею: повторение года", SECTION.review),
+      topic("y-teens", "Второй десяток: десяток и единицы", SECTION.numbers20, teensLesson()),
+      topic("y-add20", "Сложение и вычитание без перехода через десяток", SECTION.add20, add20Lesson()),
+      topic("y-cross", "Сложение с переходом через десяток", SECTION.add20, crossLesson()),
+      topic("y-review", "Что я умею: повторение года", SECTION.review, reviewLesson()),
     ],
   },
 ];

@@ -14,14 +14,16 @@ export function topicStatus(item: Topic, completed: readonly string[], nextId: s
   return item.id === nextId ? "next" : "open";
 }
 
-/** Первая по порядку тема с уроком, которую ещё не прошли. */
+/**
+ * Первая по порядку тема с уроком, которую ещё не прошли. Дополнительные темы
+ * предлагаются в последнюю очередь: ребёнка, который ушёл вперёд, не надо
+ * возвращать к началу года из-за темы, добавленной позже.
+ */
 export function nextTopic(completed: readonly string[]): Topic | null {
-  for (const quarter of MATH_YEAR) {
-    for (const item of quarter.topics) {
-      if (item.lesson && !completed.includes(item.lesson.id)) return item;
-    }
-  }
-  return null;
+  const open = MATH_YEAR.flatMap((quarter) => quarter.topics).filter(
+    (item) => item.lesson && !completed.includes(item.lesson.id),
+  );
+  return open.find((item) => !item.extra) ?? open[0] ?? null;
 }
 
 export type QuarterProgress = { done: number; ready: number; total: number; complete: boolean };
@@ -31,7 +33,8 @@ export type QuarterProgress = { done: number; ready: number; total: number; comp
  * не блокируют награду: ребёнок не виноват, что урока ещё нет.
  */
 export function quarterProgress(quarter: Quarter, completed: readonly string[]): QuarterProgress {
-  const ready = quarter.topics.filter((item) => item.lesson);
+  // Дополнительные темы не входят в условие награды (см. Topic.extra).
+  const ready = quarter.topics.filter((item) => item.lesson && !item.extra);
   const done = ready.filter((item) => completed.includes(item.lesson!.id)).length;
   return {
     done,
