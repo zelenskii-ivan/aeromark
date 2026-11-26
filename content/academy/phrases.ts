@@ -19,6 +19,7 @@ export const INSTRUCTIONS: Record<ExerciseKind, string> = {
   "hear-syllable": "Послушай слог и найди его.",
   "word-picture": "Прочитай слово и найди картинку.",
   "build-word": "Послушай слово и собери его из слогов.",
+  "spell-word": "Послушай слово и собери его из букв.",
   sentence: "Прочитай предложение и ответь.",
   story: "Прочитай рассказ и ответь на вопросы.",
 };

@@ -354,3 +354,32 @@ test("отчёт родителю: сетка букв и рекомендаци
   assert.ok(report.recommendations.some((r) => r.title === "Лётный тест"));
   assert.equal(skillSummary(academy, "letters").mastered, 1);
 });
+
+test("«Собери из букв»: буквы слова по порядку, лишняя буква не из слова", () => {
+  const short = LESSONS.filter((lesson) => lesson.exercises.includes("spell-word"));
+  assert.ok(short.length > 0, "нет уроков с письмом");
+  for (const lesson of short) {
+    for (const difficulty of [1, 2, 3]) {
+      const plan = planLesson(initialAcademy, lesson, DAY, difficulty).filter((step) => step.kind === "spell-word");
+      for (const [i, step] of plan.entries()) {
+        const ex = buildExercise(step, initialAcademy, difficulty, i);
+        assert.equal(ex.kind, "build-word");
+        assert.equal(ex.letters, true);
+        assert.equal(ex.parts.join(""), ex.word, `${lesson.id}: ${ex.word}`);
+        const extra = ex.tiles.length - ex.parts.length;
+        assert.equal(extra, difficulty === 1 ? 0 : 1);
+        if (extra) {
+          const spare = [...ex.tiles];
+          for (const part of ex.parts) spare.splice(spare.indexOf(part), 1);
+          assert.ok(!ex.word.includes(spare[0]), `${ex.word}: лишняя буква ${spare[0]} есть в слове`);
+        }
+      }
+    }
+  }
+});
+
+test("новые рассказы дописаны в конец: старые уроки Академии не сдвинулись", () => {
+  const firstSeven = ["st-cat", "st-plane", "st-snow", "st-hangar", "st-cafe", "st-owl", "st-airport"];
+  assert.deepEqual(STORIES.slice(0, 7).map((s) => s.id), firstSeven);
+  assert.ok(STORIES.length >= 15);
+});

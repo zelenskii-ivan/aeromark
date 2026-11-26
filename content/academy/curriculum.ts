@@ -63,6 +63,8 @@ export type ExerciseKind =
   | "word-picture"
   /** Слышит слово — собирает из слогов по порядку. */
   | "build-word"
+  /** Слышит слово — собирает из букв: первое письмо, звук за звуком. */
+  | "spell-word"
   /** Читает предложение — отвечает (картинка, да/нет, пропущенное слово). */
   | "sentence"
   /** Читает рассказ — отвечает на вопросы и показывает, где написано. */
@@ -218,7 +220,13 @@ const level4: Level = {
       title: chunk(words, 8).length > 1 ? `${stage.title} ${index + 1}` : stage.title,
       goal: stage.goal,
       focus: group.map((word) => wordKey(plainWord(word))),
-      exercises: ["word-picture", "build-word"] as ExerciseKind[],
+      // Короткие слова ещё и пишем буквами: звук за звуком, как в прописи.
+      // Длинные — только из слогов, иначе плиток слишком много для экрана.
+      exercises: (stage.shape === "cvc"
+        ? ["word-picture", "spell-word"]
+        : stage.shape === "open2"
+          ? ["word-picture", "build-word", "spell-word"]
+          : ["word-picture", "build-word"]) as ExerciseKind[],
       length: 8,
     }));
   }),
