@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PIECES, PIECE_COUNT, startPuzzle, place, remaining, isComplete, markChoice } from '../lib/su57/puzzle.ts';
 
-test('деталей восемь и все разные: по четыре на каждого', () => {
-  assert.equal(PIECE_COUNT, 8);
+test('деталей десять и все разные: по пять на каждого', () => {
+  assert.equal(PIECE_COUNT, 10);
   assert.equal(new Set(PIECES.map(p => p.id)).size, PIECE_COUNT);
 });
 
@@ -41,7 +41,7 @@ test('Марк начинает с корпуса, дальше берёт то�
   assert.equal(markChoice(s, () => 0.9999), remaining(s).at(-1));
 });
 
-test('игра доходит до конца: восемь ходов, по четыре на каждого', () => {
+test('игра доходит до конца: десять ходов, по пять на каждого', () => {
   let s = startPuzzle('player');
   const turns = { player: 0, mark: 0 };
   while (!isComplete(s)) {
@@ -52,7 +52,7 @@ test('игра доходит до конца: восемь ходов, по ч�
     turns[who]++;
     s = r.state;
   }
-  assert.deepEqual(turns, { player: 4, mark: 4 });
+  assert.deepEqual(turns, { player: 5, mark: 5 });
   assert.equal(markChoice(s), null);
   assert.equal(place(s, s.turn, 'nose', 'nose').ok, false);
 });
