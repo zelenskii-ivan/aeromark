@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { PieceId } from "@/lib/su57/puzzle";
 
 /**
- * Игрушечный Су-57 из восьми деталей. Координаты — в метрах в системе
+ * Игрушечный Су-57 из десяти деталей. Координаты — в метрах в системе
  * самолёта: нос смотрит в +X, верх — +Y, правое крыло — в +Z. Длина около
  * 2,6 м: Марку (1,22 м) по силам донести и поставить каждую деталь.
  *
@@ -127,9 +127,10 @@ function partsFor(id: PieceId): Part[] {
         { geo: flap, color: CAMO_DARK },
       ];
     }
-    case "tail": {
+    case "engineL":
+    case "engineR": {
       const parts: Part[] = [];
-      for (const z of [-0.16, 0.16]) {
+      for (const z of [id === "engineR" ? 0.16 : -0.16]) {
         const engine = new THREE.CylinderGeometry(0.085, 0.095, 0.62, 20);
         engine.rotateZ(Math.PI / 2);
         engine.translate(-0.68, 0.34, z);
@@ -138,11 +139,36 @@ function partsFor(id: PieceId): Part[] {
         nozzle.translate(-1.03, 0.34, z);
         parts.push({ geo: engine, color: CAMO_DARK }, { geo: nozzle, color: NOZZLE, extra: { side: THREE.DoubleSide, metalness: 0.6 } });
       }
-      for (const sign of [1, -1]) {
+      for (const sign of [id === "engineR" ? 1 : -1]) {
         const pts = ([[-0.72, 0.26], [-0.98, 0.66], [-1.12, 0.66], [-1.06, 0.26]] as [number, number][]).map(
           ([x, z]) => [x, z * sign],
         ) as [number, number][];
         parts.push({ geo: plate(sign > 0 ? pts : [...pts].reverse(), 0.022, 0.33, 0.006), color: CAMO });
+      }
+      return parts;
+    }
+    case "gear": {
+      // Носовая стойка и две основные: стойка, колесо и серая ступица.
+      const parts: Part[] = [];
+      const legs: [number, number, number][] = [
+        [0.84, 0, 0.055],
+        [-0.25, -0.33, 0.075],
+        [-0.25, 0.33, 0.075],
+      ];
+      for (const [x, z, r] of legs) {
+        const strut = new THREE.CylinderGeometry(0.014, 0.018, 0.34 - r, 10);
+        strut.translate(x, r + (0.34 - r) / 2, z);
+        const wheel = new THREE.CylinderGeometry(r, r, 0.045, 20);
+        wheel.rotateX(Math.PI / 2);
+        wheel.translate(x, r, z);
+        const hub = new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.05, 12);
+        hub.rotateX(Math.PI / 2);
+        hub.translate(x, r, z);
+        parts.push(
+          { geo: strut, color: 0x9aa3ad, extra: { metalness: 0.5 } },
+          { geo: wheel, color: 0x22262b, extra: { roughness: 0.9 } },
+          { geo: hub, color: 0xb9c0c8, extra: { metalness: 0.6 } },
+        );
       }
       return parts;
     }
@@ -210,7 +236,34 @@ export function pieceMesh(id: PieceId): PieceMesh {
 export function piecesFromModel(root: THREE.Object3D): Map<PieceId, PieceMesh> | null {
   const out = new Map<PieceId, PieceMesh>();
   root.updateMatrixWorld(true);
-  const ids: PieceId[] = ["body", "nose", "cockpit", "wingL", "wingR", "tail", "finL", "finR"];
+  const ids: PieceId[] = ["body", "nose", "cockpit", "wingL", "wingR", "finL", "finR"];
+  const wrap = (id: PieceId, geo: THREE.BufferGeometry, material: THREE.Material): PieceMesh => {
+    geo.computeBoundingBox();
+    const center = geo.boundingBox!.getCenter(new THREE.Vector3());
+    geo.translate(-center.x, -center.y, -center.z);
+    return {
+      id,
+      dense: true,
+      center,
+      build: (override) => {
+        const group = new THREE.Group();
+        const m = new THREE.Mesh(geo, override ?? material.clone());
+        m.castShadow = !override;
+        m.receiveShadow = !override;
+        group.add(m);
+        return group;
+      },
+    };
+  };
+  // В модели двигатели — один объект «tail». Делим его пополам по оси
+  // симметрии: левый и правый двигатель ставятся отдельно — деталей больше.
+  const tail = meshOf(root, "tail");
+  if (!tail) return null;
+  for (const [id, side] of [["engineL", -1], ["engineR", 1]] as const) {
+    out.set(id, wrap(id, halfBySide(tail, side), tail.material as THREE.Material));
+  }
+  // Шасси в модели нет — оно строится так же, как запасной самолёт.
+  out.set("gear", pieceMesh("gear"));
   for (const id of ids) {
     const node = root.getObjectByName(id);
     let mesh: THREE.Mesh | null = null;
@@ -238,6 +291,36 @@ export function piecesFromModel(root: THREE.Object3D): Map<PieceId, PieceMesh> |
         return group;
       },
     });
+  }
+  return out;
+}
+
+function meshOf(root: THREE.Object3D, name: string): THREE.Mesh | null {
+  let found: THREE.Mesh | null = null;
+  root.getObjectByName(name)?.traverse((o) => {
+    if (!found && (o as THREE.Mesh).isMesh) found = o as THREE.Mesh;
+  });
+  return found;
+}
+
+/** Половина сетки по знаку Z (лево/право) в мировых координатах. */
+function halfBySide(source: THREE.Mesh, side: -1 | 1): THREE.BufferGeometry {
+  const geo = source.geometry.clone().toNonIndexed();
+  geo.applyMatrix4(source.matrixWorld);
+  const pos = geo.getAttribute("position");
+  const keep: number[] = [];
+  for (let t = 0; t < pos.count; t += 3) {
+    const z = (pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2)) / 3;
+    if (Math.sign(z || 1e-9) === side) keep.push(t, t + 1, t + 2);
+  }
+  const out = new THREE.BufferGeometry();
+  for (const name of Object.keys(geo.attributes)) {
+    const attr = geo.getAttribute(name);
+    const data = new Float32Array(keep.length * attr.itemSize);
+    keep.forEach((v, i) => {
+      for (let c = 0; c < attr.itemSize; c++) data[i * attr.itemSize + c] = attr.getComponent(v, c);
+    });
+    out.setAttribute(name, new THREE.BufferAttribute(data, attr.itemSize, attr.normalized));
   }
   return out;
 }

@@ -20,6 +20,14 @@ import {
   type PuzzleState,
   type Turn,
 } from "@/lib/su57/puzzle";
+import {
+  arrived,
+  gaitTimeScale,
+  makeWalker,
+  stepWalker as stepMotion,
+  type Gait,
+  type Walker as MotionWalker,
+} from "@/lib/an225/motion";
 import { buildAfterburners, buildStand, pieceMesh, piecesFromModel, type PieceMesh } from "./plane";
 import "./su57.css";
 
@@ -64,9 +72,15 @@ const RIGHT_LANE = 2.05;
 const LEFT_LANE = -1.75;
 const SHELF_SCALE = 0.62;
 const CARRY_SCALE = 0.45;
-/** Скорости, при которых ступни не скользят: длина шага анимации / время шага (из Blender). */
-const WALK_SPEED = 0.785;
-const CARRY_SPEED = 0.583;
+/** Стены ангара для физики ходьбы: Марк не уходит за край сцены. */
+const HANGAR_BOUNDS = { minX: -6, maxX: 6, minZ: -5, maxZ: 5 };
+const GAIT_CLIP: Record<Gait, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run",
+  carry: "CarryWalk",
+  carryIdle: "CarryIdle",
+};
 
 const PRAISE = ["Отлично!", "Здорово получилось!", "Точно в цель!", "Молодец, пилот!"];
 const MARK_SAYS = [
@@ -173,12 +187,12 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         });
         const size = new THREE.Box3().setFromObject(pivot).getSize(new THREE.Vector3());
         const longest = Math.max(size.x, size.z, 0.01);
-        const shelfScale = Math.min(SHELF_SCALE, 0.74 / longest);
-        const carryScale = Math.min(CARRY_SCALE, 0.55 / longest);
-        // Полка всегда в один ряд: на узком экране поддоны стоят теснее,
-        // а камера сама отъезжает так, чтобы видно было всё.
+        // Полка всегда в один ряд и по ширине прежняя: деталей стало больше,
+        // поэтому поддоны стоят теснее, а детали на них чуть мельче.
         const narrow = mount.clientWidth / Math.max(mount.clientHeight, 1) < 1;
-        const spacing = narrow ? 0.66 : 0.8;
+        const spacing = Math.min(narrow ? 0.66 : 0.8, 5.9 / Math.max(PIECES.length - 1, 1));
+        const shelfScale = Math.min(SHELF_SCALE, Math.min(0.74, spacing + 0.04) / longest);
+        const carryScale = Math.min(CARRY_SCALE, 0.55 / longest);
         const x = (index - (PIECES.length - 1) / 2) * spacing;
         const z = SHELF_Z;
         const shelf = new THREE.Vector3(x, 0.12 + (size.y * shelfScale) / 2 + 0.02, z);
@@ -308,94 +322,36 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
     const faceDir = (dx: number, dz: number, dur = 0.25) =>
       faceTo(new THREE.Vector3(markPos.x + dx, 0, markPos.z + dz), dur);
     /**
-     * Ходьба по пути без остановок на углах: углы скругляются, скорость плавно
-     * растёт и падает, а темп анимации подстраивается под скорость — ступни не
-     * скользят. Скорость шага посчитана в Blender по длине шага анимации.
+     * Ходьба — та же физика, что в «Мрии» (lib/an225/motion.ts): Марк идёт
+     * только туда, куда смотрит, поэтому боком не ходит; на длинных отрезках
+     * бежит, а темп анимации считается от реальной скорости, и ступни не
+     * скользят. Раньше тело ехало по точкам пути, а поворачивалось вдогонку.
      */
-    type Walker = {
-      pts: THREE.Vector3[];
-      cum: number[];
-      s: number;
-      v: number;
-      vmax: number;
-      action: THREE.AnimationAction | null;
-      done: () => void;
-    };
-    let walker: Walker | null = null;
-    const roundCorners = (raw: THREE.Vector3[]) => {
-      const out: THREE.Vector3[] = [raw[0]!.clone()];
-      for (let i = 1; i < raw.length - 1; i++) {
-        const prev = raw[i - 1]!, cur = raw[i]!, next = raw[i + 1]!;
-        const r = Math.min(0.45, prev.distanceTo(cur) / 2, cur.distanceTo(next) / 2);
-        const a = cur.clone().add(prev.clone().sub(cur).setLength(r));
-        const b = cur.clone().add(next.clone().sub(cur).setLength(r));
-        for (let k = 0; k <= 6; k++) {
-          const t = k / 6;
-          // Квадратичная кривая Безье a → cur → b.
-          out.push(
-            a.clone().multiplyScalar((1 - t) ** 2)
-              .add(cur.clone().multiplyScalar(2 * (1 - t) * t))
-              .add(b.clone().multiplyScalar(t * t)),
-          );
-        }
-      }
-      out.push(raw[raw.length - 1]!.clone());
-      return out.filter((p, i, arr) => i === 0 || p.distanceTo(arr[i - 1]!) > 1e-4);
-    };
-    const walkPath = async (points: THREE.Vector3[], anim: string, speed: number) => {
-      if (!mark || !points.length) return;
-      // Если цель за спиной, сначала разворачиваемся на месте, а не пятимся.
-      const first = points[0]!;
-      const want = Math.atan2(first.x - markPos.x, first.z - markPos.z);
-      let diff = want - mark.root.rotation.y;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      if (Math.abs(diff) > 1.4 && markPos.distanceTo(first) > 0.1) await faceTo(first, 0.35);
-      return walkAlong(points, anim, speed);
-    };
-    const walkAlong = (points: THREE.Vector3[], anim: string, speed: number) =>
+    let walk: { w: MotionWalker; carrying: boolean; clip: string | null; done: () => void } | null = null;
+    const walkPath = (points: THREE.Vector3[], carrying: boolean) =>
       new Promise<void>((resolve) => {
-        if (!mark) return resolve();
-        const pts = roundCorners([markPos.clone(), ...points.map((p) => new THREE.Vector3(p.x, 0, p.z))]);
-        const cum = [0];
-        for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1]! + pts[i]!.distanceTo(pts[i - 1]!));
-        if (cum[cum.length - 1]! < 0.03) return resolve();
-        play(anim, false, 0.3);
-        walker = { pts, cum, s: 0, v: 0, vmax: speed, action: mark.actions[anim] ?? null, done: resolve };
+        if (!mark || !points.length) return resolve();
+        const w = makeWalker({ x: markPos.x, z: markPos.z }, mark.root.rotation.y);
+        w.path = points.map((p) => ({ x: p.x, z: p.z }));
+        walk = { w, carrying, clip: null, done: resolve };
       });
     const stepWalker = (dt: number) => {
-      if (!walker || !mark) return;
-      const w = walker;
-      const total = w.cum[w.cum.length - 1]!;
-      const left = total - w.s;
-      // Разгон и торможение примерно за полшага.
-      const accel = 1.6;
-      const brake = Math.sqrt(2 * accel * Math.max(left, 0));
-      w.v = Math.min(w.vmax, w.v + accel * dt, Math.max(brake, 0.12));
-      w.s = Math.min(total, w.s + w.v * dt);
-      let i = 1;
-      while (i < w.cum.length - 1 && w.cum[i]! < w.s) i++;
-      const a = w.pts[i - 1]!, b = w.pts[i]!;
-      const seg = w.cum[i]! - w.cum[i - 1]! || 1;
-      markPos.lerpVectors(a, b, (w.s - w.cum[i - 1]!) / seg);
-      // Поворот туда, куда идёт путь, но не мгновенно.
-      const ahead = Math.min(total, w.s + 0.25);
-      let j = 1;
-      while (j < w.cum.length - 1 && w.cum[j]! < ahead) j++;
-      const look = w.pts[j]!;
-      const dx = look.x - markPos.x, dz = look.z - markPos.z;
-      if (Math.hypot(dx, dz) > 1e-3) {
-        const target = Math.atan2(dx, dz);
-        let diff = target - mark.root.rotation.y;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        mark.root.rotation.y += diff * Math.min(1, dt * 7);
+      if (!walk || !mark) return;
+      const next = stepMotion(walk.w, dt, { kind: "path" }, walk.carrying, [], HANGAR_BOUNDS);
+      walk.w = next;
+      markPos.set(next.pos.x, 0, next.pos.z);
+      mark.root.rotation.y = next.yaw;
+      const clip = GAIT_CLIP[next.gait];
+      if (clip !== walk.clip) {
+        play(clip, false, 0.25);
+        walk.clip = clip;
       }
-      if (w.action) w.action.timeScale = Math.max(0.35, w.v / w.vmax);
-      if (w.s >= total - 1e-4) {
-        if (w.action) w.action.timeScale = 1;
-        walker = null;
-        w.done();
+      if (mark.current) mark.current.timeScale = gaitTimeScale(next.gait, next.speed);
+      if (arrived(next)) {
+        if (mark.current) mark.current.timeScale = 1;
+        const done = walk.done;
+        walk = null;
+        done();
       }
     };
     /** Обход самолёта: по передней или задней дорожке, между ними — сбоку. */
@@ -567,7 +523,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
       await wait(0.4);
       if (mark) {
         const pickSpot = new THREE.Vector3(piece.shelf.x, 0, FRONT_LANE + 0.08);
-        await walkPath(route(pickSpot), "Walk", WALK_SPEED);
+        await walkPath(route(pickSpot), false);
         play("Idle", false, 0.2);
         await faceDir(0, 1);
         const dur = play("PickUp", true, 0.2);
@@ -581,7 +537,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
           0,
           BACK_LANE,
         );
-        await walkPath(route(placeSpot), "CarryWalk", CARRY_SPEED);
+        await walkPath(route(placeSpot), true);
         play("CarryIdle", false, 0.2);
         await faceDir(0, 1);
         const placeDur = play("Place", true, 0.2);
@@ -621,7 +577,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
         // Отводим Марка с пути самолёта: тот поедет к воротам, то есть к −Z.
         // Вправо: слева стоит Капитан Папа и оттуда взлетит.
         if (Math.abs(markPos.x) < 1.9 || markPos.x < 0) {
-          await walkPath([new THREE.Vector3(2.5, 0, markPos.z)], "Walk", WALK_SPEED);
+          await walkPath([new THREE.Vector3(2.5, 0, markPos.z)], false);
         }
         play("Idle", false, 0.3);
         await faceTo(new THREE.Vector3(0, 0, markPos.z), 0.3);
@@ -1061,7 +1017,7 @@ function Su57Round({ onExit, onWin, rewardAvailable, autoStart, onRestart }: Rou
           <span className="su57-eyebrow">ИГРОВОЙ ЭПИЗОД 02</span>
           <h1>Собери Су-57 вместе с Марком</h1>
           <p>
-            В ангаре лежат восемь деталей самолёта. Ходите по очереди: ты выбираешь деталь на
+            В ангаре лежат десять деталей самолёта. Ходите по очереди: ты выбираешь деталь на
             полке и нажимаешь на её место на самолёте, потом свою деталь ставит Марк.
           </p>
           <Button size="lg" disabled={phase === "loading"} onClick={() => startRef.current()}>

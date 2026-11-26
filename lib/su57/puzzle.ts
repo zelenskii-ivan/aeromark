@@ -11,7 +11,9 @@ export type PieceId =
   | "cockpit"
   | "wingL"
   | "wingR"
-  | "tail"
+  | "engineL"
+  | "engineR"
+  | "gear"
   | "finL"
   | "finR";
 
@@ -31,7 +33,9 @@ export const PIECES: readonly PieceInfo[] = [
   { id: "cockpit", name: "Кабина", spoken: "кабину пилота" },
   { id: "wingL", name: "Левое крыло", spoken: "левое крыло" },
   { id: "wingR", name: "Правое крыло", spoken: "правое крыло" },
-  { id: "tail", name: "Двигатели", spoken: "двигатели с хвостовым оперением" },
+  { id: "engineL", name: "Левый двигатель", spoken: "левый двигатель с хвостовым крылышком" },
+  { id: "engineR", name: "Правый двигатель", spoken: "правый двигатель с хвостовым крылышком" },
+  { id: "gear", name: "Шасси", spoken: "шасси — это колёса самолёта" },
   { id: "finL", name: "Левый киль", spoken: "левый киль" },
   { id: "finR", name: "Правый киль", spoken: "правый киль" },
 ];
