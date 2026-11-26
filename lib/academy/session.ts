@@ -70,6 +70,9 @@ const pick = <T,>(list: readonly T[], rng: Rng): T => list[Math.floor(rng() * li
 
 // ---------- План полёта ----------
 
+/** Лишняя буква для «Собери из букв»: частые буквы, которые легко спутать. */
+const SPELL_DECOYS = ["а", "о", "у", "ы", "и", "м", "н", "л", "р", "с", "т", "к", "п", "д"];
+
 export type PlanStep = { item: string; kind: ExerciseKind };
 
 /** Каким упражнением повторять единицу вне её урока. */
@@ -210,7 +213,16 @@ export type Exercise =
   | { kind: "read-syllable"; item: string; syllable: string; options: string[] }
   | { kind: "hear-syllable"; item: string; syllable: string; options: string[] }
   | { kind: "word-picture"; item: string; word: string; parts: string[]; options: Picture[] }
-  | { kind: "build-word"; item: string; word: string; parts: string[]; picture: string; tiles: string[] }
+  | {
+      kind: "build-word";
+      item: string;
+      word: string;
+      parts: string[];
+      picture: string;
+      tiles: string[];
+      /** Собираем из букв, а не из слогов («Собери слово» как первое письмо). */
+      letters?: boolean;
+    }
   | { kind: "sentence"; item: string; sentence: Sentence }
   | { kind: "story"; item: string; story: Story };
 
@@ -347,6 +359,13 @@ export function buildExercise(
   if (prefix === "W") {
     const word = wordByText.get(value) ?? WORDS[0]!;
     const text = plainWord(word);
+    if (step.kind === "spell-word") {
+      // Буквы по порядку. Ё остаётся Ё: это отдельная буква, а не «е с точками».
+      const letters = [...text];
+      const spare = SPELL_DECOYS.filter((letter) => !letters.includes(letter));
+      const tiles = difficulty === 1 ? letters : [...letters, pick(spare, rng)];
+      return { kind: "build-word", item: step.item, word: text, parts: letters, picture: word.picture, tiles: shuffle(tiles, rng), letters: true };
+    }
     if (step.kind === "build-word" && wordParts(word).length > 1) {
       const decoy = pick(ALL_SYLLABLES.filter((s) => !wordParts(word).includes(s)), rng);
       const tiles = difficulty === 1 ? wordParts(word) : [...wordParts(word), decoy];

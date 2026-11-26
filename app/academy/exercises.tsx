@@ -412,10 +412,12 @@ function BuildWord({ exercise, onDone }: { exercise: Extract<Exercise, { kind: "
   const [burst, setBurst] = useState(0);
   const done = placed.length === exercise.parts.length;
 
+  const instruction = INSTRUCTIONS[exercise.letters ? "spell-word" : "build-word"];
+
   useEffect(() => {
-    void playSequence([INSTRUCTIONS["build-word"], exercise.word]);
+    void playSequence([instruction, exercise.word]);
     return () => stopAudio();
-  }, [exercise.word]);
+  }, [exercise.word, instruction]);
 
   const tap = (index: number) => {
     if (done || placed.includes(index)) return;
@@ -423,7 +425,9 @@ function BuildWord({ exercise, onDone }: { exercise: Extract<Exercise, { kind: "
     if (exercise.tiles[index] === expected) {
       const next = [...placed, index];
       setPlaced(next);
-      void play(exercise.tiles[index]!);
+      // Слог звучит записью. Отдельную согласную букву озвучка назвала бы
+      // «эм», а не звуком [м], поэтому при письме буквы не проговариваются.
+      if (!exercise.letters) void play(exercise.tiles[index]!);
       if (next.length === exercise.parts.length) {
         setBurst((value) => value + 1);
         if (isSoundOn()) playWin();
@@ -449,11 +453,11 @@ function BuildWord({ exercise, onDone }: { exercise: Extract<Exercise, { kind: "
           type="button"
           className="ac-icon-btn"
           aria-label="Повторить задание"
-          onClick={() => void playSequence([INSTRUCTIONS["build-word"], exercise.word])}
+          onClick={() => void playSequence([instruction, exercise.word])}
         >
           <CircleHelp aria-hidden="true" />
         </button>
-        <p>{INSTRUCTIONS["build-word"]}</p>
+        <p>{instruction}</p>
       </div>
       <div className="ac-stage">
         <div className="ac-picture-stage">
