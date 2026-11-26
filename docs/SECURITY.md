@@ -36,7 +36,9 @@
 - Изоляция семей: каждый запрос к данным ребёнка проверяет `family_id`
   текущего родителя. Проверка входа вынесена в `preHandler`, поэтому её
   нельзя забыть в отдельном маршруте.
-- CSP, HSTS, X-Frame-Options, Referrer-Policy и Permissions-Policy на Caddy;
+- CSP, HSTS, X-Frame-Options, Referrer-Policy и Permissions-Policy отдаёт сам
+  Next.js (`next.config.ts`), поэтому они не зависят от того, какой прокси
+  стоит впереди;
   отдельный запрещающий CSP на API.
 - Оба контейнера запускаются от пользователя `node`, не от root.
 - Маршруты удаления данных ребёнка и семьи.
