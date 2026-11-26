@@ -2,13 +2,18 @@ import type { Lesson, Subject } from "../lesson.ts";
 import { mathYearLessons } from "../math-year/plan.ts";
 import { mathBond10 } from "./math-bond-10.ts";
 import { russianSoft } from "./russian-soft.ts";
+import { russianYear } from "./russian-year.ts";
 import { readingHangar } from "./reading-hangar.ts";
 import { englishCommands } from "./english-commands.ts";
 
-/** Витрина на главном экране: по одному уроку на предмет. */
+/**
+ * Витрина на главном экране. Математика живёт на карте «Математика на год»,
+ * здесь — по уроку на предмет и уроки русского языка по порядку программы.
+ */
 export const lessons: readonly Lesson[] = [
   mathBond10,
   russianSoft,
+  ...russianYear(),
   readingHangar,
   englishCommands,
 ];

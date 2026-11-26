@@ -1004,7 +1004,8 @@ export default function Home() {
                 <h2>Новое разбираем по шагам</h2>
               </div>
               <span>
-                {saved.completedLessons.length} из {lessons.length} пройдено
+                {lessons.filter((item) => saved.completedLessons.includes(item.id)).length} из{" "}
+                {lessons.length} пройдено
               </span>
             </div>
             <div className="lesson-grid">
