@@ -16,7 +16,7 @@ import {
   verifyPasswordConstantish,
   warmUpPasswordTiming,
 } from "./auth.js";
-import { hashPassword, hashToken, normalizeInvite, randomToken } from "./security.js";
+import { hashPassword, hashToken, randomToken } from "./security.js";
 import {
   resetExpiresAt,
   sendExistingAccountEmail,
@@ -25,7 +25,18 @@ import {
   verificationExpiresAt,
 } from "./email.js";
 
-const app = Fastify({ logger: true, trustProxy: true, bodyLimit: 256_000 });
+/**
+ * Доверяем ровно одному прокси — nginx перед контейнером. С `trustProxy: true`
+ * адрес клиента брался из самого левого X-Forwarded-For, а его присылает сам
+ * посетитель: подставляя каждый раз новый адрес, можно было обойти лимиты на
+ * вход, PIN ребёнка и регистрацию. С одним доверенным прокси адрес — последний
+ * в цепочке, его дописывает nginx.
+ */
+const app = Fastify({
+  logger: true,
+  trustProxy: (_address: string, hop: number) => hop === 0,
+  bodyLimit: 256_000,
+});
 const origin = process.env.APP_ORIGIN || "http://localhost:3000";
 
 await app.register(helmet, {
@@ -59,22 +70,6 @@ app.addHook("onSend", async (_request, reply) => {
 });
 
 app.get("/health", async () => ({ ok: true }));
-
-app.post(
-  "/api/admin/invites",
-  { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
-  async (request, reply) => {
-    if (!isAdmin(request)) return reply.code(403).send({ error: "Нет доступа" });
-    const body = z.object({ label: z.string().min(2).max(100) }).parse(request.body);
-    const code = normalizeInvite(`AERO-${randomToken(6).toUpperCase()}`);
-    await db.query("INSERT INTO invite_codes(id,code_hash,label) VALUES($1,$2,$3)", [
-      randomUUID(),
-      hashToken(code),
-      body.label,
-    ]);
-    return { code, label: body.label };
-  },
-);
 
 app.post(
   "/api/auth/register",
@@ -525,7 +520,10 @@ app.register(async (secured) => {
   });
 });
 
-app.post("/api/admin/families/:id/block", async (request, reply) => {
+app.post(
+  "/api/admin/families/:id/block",
+  { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+  async (request, reply) => {
   if (!isAdmin(request)) return reply.code(403).send({ error: "Нет доступа" });
   const params = idParams.parse(request.params);
   await db.query("UPDATE families SET status='blocked' WHERE id=$1", [params.id]);
@@ -534,7 +532,8 @@ app.post("/api/admin/families/:id/block", async (request, reply) => {
     [params.id],
   );
   return { ok: true };
-});
+  },
+);
 
 app.setErrorHandler((error, _request, reply) => {
   if (error instanceof z.ZodError) {

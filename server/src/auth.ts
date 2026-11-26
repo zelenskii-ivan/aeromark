@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { db } from "./db.js";
 import { hashPassword, hashToken, randomToken, verifyPassword } from "./security.js";
@@ -109,8 +109,12 @@ export function verifyPasswordConstantish(
     .then(() => false);
 }
 
+/** Сравнение за постоянное время: по скорости ответа токен не подобрать. */
 export function isAdmin(request: FastifyRequest): boolean {
   const expected = process.env.ADMIN_BOOTSTRAP_TOKEN;
   const provided = request.headers["x-admin-token"];
-  return Boolean(expected) && typeof provided === "string" && provided === expected;
+  if (!expected || typeof provided !== "string") return false;
+  const a = Buffer.from(hashToken(provided));
+  const b = Buffer.from(hashToken(expected));
+  return timingSafeEqual(a, b);
 }

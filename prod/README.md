@@ -84,6 +84,8 @@ zcat /var/backups/aeromark/prod-ДАТА.sql.gz \
    `sudo ln -s /etc/nginx/sites-available/aeromark-staging /etc/nginx/sites-enabled/`,
    `sudo nginx -t && sudo systemctl reload nginx`.
 5. `sudo certbot --nginx -d test.xn--80aa4agjld3h.xn--p1ai`.
+   Обязательно: без HTTPS пароль staging передаётся открытым текстом.
+   Проверка: `curl -sI http://test.xn--80aa4agjld3h.xn--p1ai | head -1` → `301`.
 6. `sudo /opt/aeromark/src/prod/deploy.sh staging`.
 
 Тестовые ответы и регистрации делать только на staging.
@@ -95,4 +97,5 @@ zcat /var/backups/aeromark/prod-ДАТА.sql.gz \
 API слушает 127.0.0.1:4000, сайт — 127.0.0.1:3000.
 Локальная проверка: `curl -fsS http://127.0.0.1:4000/health`.
 
-Корневой `docker-compose.yml` с Caddy в этом развёртывании не используется.
+Прежние корневые `docker-compose.yml` и `Caddyfile` удалены: развёртывание
+идёт только через `prod/compose.yml` и системный nginx.

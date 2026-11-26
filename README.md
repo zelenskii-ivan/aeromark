@@ -45,15 +45,20 @@ cd server && npm ci && npm run dev
 
 ## Production на VPS
 
-1. Скопируйте `.env.example` в `.env` и заполните — секреты генерируйте
-   через `openssl rand -base64 32`.
-2. Направьте A-запись домена на IP сервера.
-3. `docker compose up -d --build`.
-4. Проверьте `https://ваш-домен/health`.
-5. Зарегистрируйте взрослого через интерфейс и подтвердите почту по ссылке из письма.
+Сайт аэромарк.рф работает на VPS: системный nginx с сертификатом certbot
+принимает HTTPS и передаёт запросы в контейнеры `web` и `api` из
+[prod/compose.yml](prod/compose.yml). Выкладка — скриптом, сначала на
+staging, потом на прод:
 
-Подробности — в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), про безопасность —
-в [docs/SECURITY.md](docs/SECURITY.md).
+```bash
+/opt/aeromark/src/prod/deploy.sh staging
+/opt/aeromark/src/prod/deploy.sh prod
+/opt/aeromark/src/prod/deploy.sh prod --rollback   # вернуть прошлый релиз
+```
+
+Всё про сервер, резервные копии и staging — в [prod/README.md](prod/README.md),
+про письма и данные — в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), про
+безопасность — в [docs/SECURITY.md](docs/SECURITY.md).
 
 Рекомендуемый сервер: Ubuntu 24.04 LTS, 2–4 vCPU, 4–8 ГБ RAM, 80 ГБ NVMe и
 ежедневные резервные копии базы.
