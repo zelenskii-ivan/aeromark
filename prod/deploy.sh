@@ -119,6 +119,31 @@ fi
 
 git -C "$SRC_DIR" checkout --quiet --detach "$sha"
 
+# --- Уборка ---------------------------------------------------------------
+# После успешной выкладки удаляем старые образы Аэромарка. Остаются:
+#   - текущий и прошлый релиз прода и staging (по ним работает --rollback);
+#   - образы моложе 6 часов: их может прямо сейчас собирать или выкладывать
+#     вторая выкладка (у прода и staging разные блокировки).
+# Кэш сборки старше недели тоже чистится; свежий остаётся, чтобы следующая
+# сборка не скачивала все пакеты заново. Отключить: AEROMARK_NO_CLEANUP=1.
+cleanup_images() {
+  [ "${AEROMARK_NO_CLEANUP:-0}" = 1 ] && return 0
+  local keep img tag created removed=0
+  keep="$(sed -n 's/^[A-Z]*_TAG=//p' "$AEROMARK_ROOT"/*.release.env* 2>/dev/null | sort -u)"
+  [ -n "$keep" ] || { log "уборка пропущена: не нашёл ни одного файла релиза"; return 0; }
+  while read -r img; do
+    tag="${img#*:}"
+    printf '%s\n' "$keep" | grep -qx "$tag" && continue
+    created="$(docker image inspect -f '{{.Created}}' "$img" 2>/dev/null || true)"
+    [ -n "$created" ] || continue
+    if [ $(( $(date +%s) - $(date -d "$created" +%s) )) -lt 21600 ]; then continue; fi
+    docker rmi "$img" >/dev/null 2>&1 && removed=$((removed + 1))
+  done < <(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^aeromark-(api|web):')
+  docker image prune -f >/dev/null 2>&1 || true
+  docker builder prune -f --filter until=168h >/dev/null 2>&1 || true
+  log "уборка: удалено старых образов — $removed, оставлены релизы: ${keep//$'\n'/ }"
+}
+
 # --- 2. Образы ------------------------------------------------------------
 build() {
   local name="$1" context="$2"
@@ -140,7 +165,9 @@ else
 fi
 
 # --- 4. Перезапуск --------------------------------------------------------
-if [ -n "$prev_api" ] && [ -n "$prev_web" ]; then
+# Повторная выкладка того же коммита не должна затирать настоящий прошлый
+# релиз: иначе откатываться станет некуда, а уборка удалит его образы.
+if [ -n "$prev_api" ] && [ -n "$prev_web" ] && { [ "$prev_api" != "$sha" ] || [ "$prev_web" != "$sha" ]; }; then
   printf 'API_TAG=%s\nWEB_TAG=%s\n' "$prev_api" "$prev_web" > "$PREV_FILE"
 fi
 printf 'API_TAG=%s\nWEB_TAG=%s\n' "$sha" "$sha" > "$RELEASE_FILE"
@@ -150,6 +177,7 @@ restart_app
 if wait_healthy; then
   echo "$(date '+%F %T') ok $sha $subject" >> "$HISTORY"
   log "готово: $PROJECT работает на $sha"
+  cleanup_images || log "уборка старых образов не удалась — на работу сайта это не влияет"
   exit 0
 fi
 
